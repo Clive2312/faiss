@@ -59,7 +59,7 @@ namespace faiss {
  * index_factory
  ***************************************************************/
 
-int index_factory_verbose = 0;
+int index_factory_verbose = 1;
 
 namespace {
 

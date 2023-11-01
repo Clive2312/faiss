@@ -419,6 +419,37 @@ void greedy_update_nearest(
     }
 }
 
+/// greedily update a nearest vector at a given level
+int greedy_update_nearest_step(
+        const HNSW& hnsw,
+        DistanceComputer& qdis,
+        int level,
+        storage_idx_t& nearest,
+        float& d_nearest) {
+    int steps = 0;
+    for (;;) {
+        storage_idx_t prev_nearest = nearest;
+
+        size_t begin, end;
+        hnsw.neighbor_range(nearest, level, &begin, &end);
+        for (size_t i = begin; i < end; i++) {
+            storage_idx_t v = hnsw.neighbors[i];
+            if (v < 0)
+                break;
+            float dis = qdis(v);
+            if (dis < d_nearest) {
+                nearest = v;
+                d_nearest = dis;
+            }
+        }
+        steps ++;
+        if (nearest == prev_nearest) {
+            
+            return steps;
+        }
+    }
+}
+
 } // namespace
 
 /// Finds neighbors and builds links with them, starting from an entry
@@ -660,6 +691,10 @@ int search_from_candidates(
         }
     }
 
+    std::string log = " %" + std::to_string(nstep) + "% ";
+    // std::cout << "level: " << level << " step: " << steps << std::endl;
+    std::cout << log << std::endl;
+
     if (level == 0) {
         stats.n1++;
         if (candidates.size() == 0) {
@@ -818,7 +853,11 @@ HNSWStats HNSW::search(
         float d_nearest = qdis(nearest);
 
         for (int level = max_level; level >= 1; level--) {
-            greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+            int steps = greedy_update_nearest_step(*this, qdis, level, nearest, d_nearest);
+            std::string log = " $" + std::to_string(level) + "$" + std::to_string(steps) + "$ ";
+            // // std::cout << "level: " << level << " step: " << steps << std::endl;
+            std::cout << log << std::endl;
+            std::cout << std::flush;
         }
 
         int ef = std::max(efSearch, k);

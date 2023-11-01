@@ -20,6 +20,8 @@
 #include <faiss/AutoTune.h>
 #include <faiss/index_factory.h>
 
+#define TUNING false
+
 /**
  * To run this demo, please download the ANN_SIFT1M dataset from
  *
@@ -78,7 +80,7 @@ int main() {
     double t0 = elapsed();
 
     // this is typically the fastest one.
-    const char* index_key = "IVF4096,Flat";
+    const char* index_key = "HNSW32,Flat";
 
     // these ones have better memory usage
     // const char *index_key = "Flat";
@@ -163,7 +165,7 @@ int main() {
     // Result of the auto-tuning
     std::string selected_params;
 
-    { // run auto-tuning
+    if (TUNING) { // run auto-tuning
 
         printf("[%.3f s] Preparing auto-tune criterion 1-recall at 1 "
                "criterion, with k=%ld nq=%ld\n",
@@ -206,13 +208,15 @@ int main() {
 
     { // Use the found configuration to perform a search
 
+        if (TUNING) { 
+
         faiss::ParameterSpace params;
+            printf("[%.3f s] Setting parameter configuration \"%s\" on index\n",
+                elapsed() - t0,
+                selected_params.c_str());
 
-        printf("[%.3f s] Setting parameter configuration \"%s\" on index\n",
-               elapsed() - t0,
-               selected_params.c_str());
-
-        params.set_index_parameters(index, selected_params.c_str());
+            params.set_index_parameters(index, selected_params.c_str());
+        }
 
         printf("[%.3f s] Perform a search on %ld queries\n",
                elapsed() - t0,

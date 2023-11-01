@@ -11,7 +11,9 @@
 
 #include <queue>
 #include <unordered_set>
+#include <map>
 #include <vector>
+#include <iostream>
 
 #include <omp.h>
 
@@ -118,6 +120,9 @@ struct HNSW {
     /// neighbors[offsets[i]:offsets[i+1]] is the list of neighbors of vector i
     /// for all levels. this is where all storage goes.
     std::vector<storage_idx_t> neighbors;
+
+    /// stats
+    std::map<int, std::vector<int>> steps_cnt;
 
     /// entry point in the search structure (one of the points with maximum
     /// level
