@@ -420,13 +420,16 @@ void greedy_update_nearest(
 }
 
 /// greedily update a nearest vector at a given level
-int greedy_update_nearest_step(
+void greedy_update_nearest_step(
         const HNSW& hnsw,
         DistanceComputer& qdis,
         int level,
         storage_idx_t& nearest,
-        float& d_nearest) {
-    int steps = 0;
+        float& d_nearest,
+        int& steps,
+        int& cnt_visited) {
+    steps = 0;
+    cnt_visited = 0;
     for (;;) {
         storage_idx_t prev_nearest = nearest;
 
@@ -441,11 +444,12 @@ int greedy_update_nearest_step(
                 nearest = v;
                 d_nearest = dis;
             }
+            cnt_visited++;
         }
+        cnt_visited++;
         steps ++;
-        if (nearest == prev_nearest) {
-            
-            return steps;
+        if (nearest == prev_nearest) { 
+            return;
         }
     }
 }
@@ -585,6 +589,7 @@ int search_from_candidates(
     }
 
     int nstep = 0;
+    int cnt_visited = 0;
 
     while (candidates.size() > 0) {
         float d0 = 0;
@@ -678,6 +683,7 @@ int search_from_candidates(
 
                 counter = 0;
             }
+            cnt_visited++;
         }
 
         for (size_t icnt = 0; icnt < counter; icnt++) {
@@ -691,9 +697,13 @@ int search_from_candidates(
         }
     }
 
-    std::string log = " %" + std::to_string(nstep) + "% ";
-    // std::cout << "level: " << level << " step: " << steps << std::endl;
-    std::cout << log << std::endl;
+    // std::string log = " %" + std::to_string(nstep) + "% ";
+    // // std::cout << "level: " << level << " step: " << steps << std::endl;
+    // std::cout << log << std::endl;
+
+    // std::string log2 = " &" + std::to_string(cnt_visited) + "& ";
+    // // std::cout << "level: " << level << " step: " << steps << std::endl;
+    // std::cout << log2 << std::endl;
 
     if (level == 0) {
         stats.n1++;
@@ -853,11 +863,15 @@ HNSWStats HNSW::search(
         float d_nearest = qdis(nearest);
 
         for (int level = max_level; level >= 1; level--) {
-            int steps = greedy_update_nearest_step(*this, qdis, level, nearest, d_nearest);
-            std::string log = " $" + std::to_string(level) + "$" + std::to_string(steps) + "$ ";
-            // // std::cout << "level: " << level << " step: " << steps << std::endl;
-            std::cout << log << std::endl;
-            std::cout << std::flush;
+            int steps = 0;
+            int cnt_visited = 0;
+            greedy_update_nearest_step(*this, qdis, level, nearest, d_nearest, steps, cnt_visited);
+            // std::string log = " $" + std::to_string(level) + "$" + std::to_string(steps) + "$ ";
+            // std::cout << log << std::endl;
+            // std::string log2 = " ?" + std::to_string(level) + "?" + std::to_string(cnt_visited) + "? ";
+            // // // std::cout << "level: " << level << " step: " << steps << std::endl;
+            // std::cout << log2 << std::endl;
+            // std::cout << std::flush;
         }
 
         int ef = std::max(efSearch, k);

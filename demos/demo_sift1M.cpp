@@ -96,35 +96,38 @@ int main() {
 
     size_t d;
 
-    {
-        printf("[%.3f s] Loading train set\n", elapsed() - t0);
+    // {
+    //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
 
-        size_t nt;
-        float* xt = fvecs_read("sift1M/sift_learn.fvecs", &d, &nt);
+    //     size_t nt;
+    //     float* xt = fvecs_read("/home/gcpuser/clive/dataset/TripClick/sift_learn.fvecs", &d, &nt);
 
-        printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
-               elapsed() - t0,
-               index_key,
-               d);
-        index = faiss::index_factory(d, index_key);
+    //     printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
+    //            elapsed() - t0,
+    //            index_key,
+    //            d);
+    //     index = faiss::index_factory(d, index_key);
 
-        printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
+    //     printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
 
-        index->train(nt, xt);
-        delete[] xt;
-    }
+    //     index->train(nt, xt);
+    //     delete[] xt;
+    // }
 
     {
         printf("[%.3f s] Loading database\n", elapsed() - t0);
 
         size_t nb, d2;
-        float* xb = fvecs_read("sift1M/sift_base.fvecs", &d2, &nb);
+        float* xb = fvecs_read("/home/gcpuser/clive/dataset/TripClick/base.fvecs", &d2, &nb);
+        d = d2;
         assert(d == d2 || !"dataset does not have same dimension as train set");
 
         printf("[%.3f s] Indexing database, size %ld*%ld\n",
                elapsed() - t0,
                nb,
                d);
+
+        index = faiss::index_factory(d, index_key);
 
         index->add(nb, xb);
 
@@ -138,123 +141,128 @@ int main() {
         printf("[%.3f s] Loading queries\n", elapsed() - t0);
 
         size_t d2;
-        xq = fvecs_read("sift1M/sift_query.fvecs", &d2, &nq);
+        xq = fvecs_read("/home/gcpuser/clive/dataset/TripClick/query.fvecs", &d2, &nq);
         assert(d == d2 || !"query does not have same dimension as train set");
     }
 
     size_t k;         // nb of results per query in the GT
     faiss::idx_t* gt; // nq * k matrix of ground-truth nearest-neighbors
 
-    {
-        printf("[%.3f s] Loading ground truth for %ld queries\n",
-               elapsed() - t0,
-               nq);
+    k = 10;
 
-        // load ground-truth and convert int to long
-        size_t nq2;
-        int* gt_int = ivecs_read("sift1M/sift_groundtruth.ivecs", &k, &nq2);
-        assert(nq2 == nq || !"incorrect nb of ground truth entries");
+    // {
+    //     printf("[%.3f s] Loading ground truth for %ld queries\n",
+    //            elapsed() - t0,
+    //            nq);
 
-        gt = new faiss::idx_t[k * nq];
-        for (int i = 0; i < k * nq; i++) {
-            gt[i] = gt_int[i];
-        }
-        delete[] gt_int;
-    }
+    //     // load ground-truth and convert int to long
+    //     size_t nq2;
+    //     int* gt_int = ivecs_read("/home/gcpuser/clive/dataset/TripClick/sift_groundtruth.ivecs", &k, &nq2);
+    //     assert(nq2 == nq || !"incorrect nb of ground truth entries");
+
+    //     gt = new faiss::idx_t[k * nq];
+    //     for (int i = 0; i < k * nq; i++) {
+    //         gt[i] = gt_int[i];
+    //     }
+    //     delete[] gt_int;
+    // }
 
     // Result of the auto-tuning
     std::string selected_params;
 
-    if (TUNING) { // run auto-tuning
+    // if (TUNING) { // run auto-tuning
 
-        printf("[%.3f s] Preparing auto-tune criterion 1-recall at 1 "
-               "criterion, with k=%ld nq=%ld\n",
-               elapsed() - t0,
-               k,
-               nq);
+    //     printf("[%.3f s] Preparing auto-tune criterion 1-recall at 1 "
+    //            "criterion, with k=%ld nq=%ld\n",
+    //            elapsed() - t0,
+    //            k,
+    //            nq);
 
-        faiss::OneRecallAtRCriterion crit(nq, 1);
-        crit.set_groundtruth(k, nullptr, gt);
-        crit.nnn = k; // by default, the criterion will request only 1 NN
+    //     faiss::OneRecallAtRCriterion crit(nq, 1);
+    //     crit.set_groundtruth(k, nullptr, gt);
+    //     crit.nnn = k; // by default, the criterion will request only 1 NN
 
-        printf("[%.3f s] Preparing auto-tune parameters\n", elapsed() - t0);
+    //     printf("[%.3f s] Preparing auto-tune parameters\n", elapsed() - t0);
 
-        faiss::ParameterSpace params;
-        params.initialize(index);
+    //     faiss::ParameterSpace params;
+    //     params.initialize(index);
 
-        printf("[%.3f s] Auto-tuning over %ld parameters (%ld combinations)\n",
-               elapsed() - t0,
-               params.parameter_ranges.size(),
-               params.n_combinations());
+    //     printf("[%.3f s] Auto-tuning over %ld parameters (%ld combinations)\n",
+    //            elapsed() - t0,
+    //            params.parameter_ranges.size(),
+    //            params.n_combinations());
 
-        faiss::OperatingPoints ops;
-        params.explore(index, nq, xq, crit, &ops);
+    //     faiss::OperatingPoints ops;
+    //     params.explore(index, nq, xq, crit, &ops);
 
-        printf("[%.3f s] Found the following operating points: \n",
-               elapsed() - t0);
+    //     printf("[%.3f s] Found the following operating points: \n",
+    //            elapsed() - t0);
 
-        ops.display();
+    //     ops.display();
 
-        // keep the first parameter that obtains > 0.5 1-recall@1
-        for (int i = 0; i < ops.optimal_pts.size(); i++) {
-            if (ops.optimal_pts[i].perf > 0.5) {
-                selected_params = ops.optimal_pts[i].key;
-                break;
-            }
-        }
-        assert(selected_params.size() >= 0 ||
-               !"could not find good enough op point");
-    }
+    //     // keep the first parameter that obtains > 0.5 1-recall@1
+    //     for (int i = 0; i < ops.optimal_pts.size(); i++) {
+    //         if (ops.optimal_pts[i].perf > 0.5) {
+    //             selected_params = ops.optimal_pts[i].key;
+    //             break;
+    //         }
+    //     }
+    //     assert(selected_params.size() >= 0 ||
+    //            !"could not find good enough op point");
+    // }
 
     { // Use the found configuration to perform a search
 
-        if (TUNING) { 
+        // if (TUNING) { 
 
-        faiss::ParameterSpace params;
-            printf("[%.3f s] Setting parameter configuration \"%s\" on index\n",
-                elapsed() - t0,
-                selected_params.c_str());
+        // faiss::ParameterSpace params;
+        //     printf("[%.3f s] Setting parameter configuration \"%s\" on index\n",
+        //         elapsed() - t0,
+        //         selected_params.c_str());
 
-            params.set_index_parameters(index, selected_params.c_str());
-        }
+        //     params.set_index_parameters(index, selected_params.c_str());
+        // }
 
-        printf("[%.3f s] Perform a search on %ld queries\n",
-               elapsed() - t0,
-               nq);
 
         // output buffers
         faiss::idx_t* I = new faiss::idx_t[nq * k];
         float* D = new float[nq * k];
 
-        index->search(nq, xq, k, D, I);
+        printf("[%.3f s] Perform a search on %ld queries\n",
+               elapsed() - t0,
+               1);
+
+        for(int i = 0; i < 1000; i++){
+            index->search(1, xq, k, D, I);
+        }
 
         printf("[%.3f s] Compute recalls\n", elapsed() - t0);
 
-        // evaluate result by hand.
-        int n_1 = 0, n_10 = 0, n_100 = 0;
-        for (int i = 0; i < nq; i++) {
-            int gt_nn = gt[i * k];
-            for (int j = 0; j < k; j++) {
-                if (I[i * k + j] == gt_nn) {
-                    if (j < 1)
-                        n_1++;
-                    if (j < 10)
-                        n_10++;
-                    if (j < 100)
-                        n_100++;
-                }
-            }
-        }
-        printf("R@1 = %.4f\n", n_1 / float(nq));
-        printf("R@10 = %.4f\n", n_10 / float(nq));
-        printf("R@100 = %.4f\n", n_100 / float(nq));
+        // // evaluate result by hand.
+        // int n_1 = 0, n_10 = 0, n_100 = 0;
+        // for (int i = 0; i < nq; i++) {
+        //     int gt_nn = gt[i * k];
+        //     for (int j = 0; j < k; j++) {
+        //         if (I[i * k + j] == gt_nn) {
+        //             if (j < 1)
+        //                 n_1++;
+        //             if (j < 10)
+        //                 n_10++;
+        //             if (j < 100)
+        //                 n_100++;
+        //         }
+        //     }
+        // }
+        // printf("R@1 = %.4f\n", n_1 / float(nq));
+        // printf("R@10 = %.4f\n", n_10 / float(nq));
+        // printf("R@100 = %.4f\n", n_100 / float(nq));
 
         delete[] I;
         delete[] D;
     }
 
     delete[] xq;
-    delete[] gt;
+    // delete[] gt;
     delete index;
     return 0;
 }
