@@ -590,6 +590,7 @@ int search_from_candidates(
 
     int nstep = 0;
     int cnt_visited = 0;
+    std::set<int> visited_block;
 
     while (candidates.size() > 0) {
         float d0 = 0;
@@ -683,6 +684,7 @@ int search_from_candidates(
 
                 counter = 0;
             }
+            visited_block.insert(hnsw.block_mapping[v1]);
             cnt_visited++;
         }
 
@@ -697,13 +699,17 @@ int search_from_candidates(
         }
     }
 
-    // std::string log = " %" + std::to_string(nstep) + "% ";
-    // // std::cout << "level: " << level << " step: " << steps << std::endl;
-    // std::cout << log << std::endl;
+    std::string log = " %" + std::to_string(nstep) + "% ";
+    // std::cout << "level: " << level << " step: " << steps << std::endl;
+    std::cout << log << std::endl;
 
-    // std::string log2 = " &" + std::to_string(cnt_visited) + "& ";
-    // // std::cout << "level: " << level << " step: " << steps << std::endl;
-    // std::cout << log2 << std::endl;
+    std::string log2 = " &" + std::to_string(cnt_visited) + "& ";
+    // std::cout << "level: " << level << " step: " << steps << std::endl;
+    std::cout << log2 << std::endl;
+
+    std::string log3 = " @" + std::to_string(visited_block.size()) + "@ ";
+    // std::cout << "level: " << level << " step: " << steps << std::endl;
+    std::cout << log3 << std::endl;
 
     if (level == 0) {
         stats.n1++;
@@ -1041,6 +1047,139 @@ void HNSW::permute_entries(const idx_t* map) {
     std::swap(levels, new_levels);
     std::swap(offsets, new_offsets);
     std::swap(neighbors, new_neighbors);
+}
+
+void HNSW::mark_cluster_radius(
+    storage_idx_t entry_point, 
+    int level, 
+    VisitedTable &vt, 
+    std::vector<int> &to_block_id, 
+    int block_id, 
+    int radius){
+
+    assert(radius >= 1);
+
+    int cnt = 0;
+
+    std::queue<std::pair<storage_idx_t, int>> buffer;
+
+    // put all neighbors in the queue
+    size_t begin, end;
+    neighbor_range(entry_point, level, &begin, &end);
+    for (size_t i = begin; i < end; i++) {
+        storage_idx_t v = neighbors[i];
+        if (v < 0)
+             break;
+        if (!vt.get(v)){
+            buffer.push(std::make_pair(v, 1));
+        }
+    }
+
+
+    // Empty the queue
+    while(!buffer.empty()){
+        storage_idx_t this_pt;
+        int r;
+        std::tie(this_pt, r) = buffer.front();
+        buffer.pop();
+
+        // assign block id for this point
+        to_block_id[this_pt] = block_id;
+        vt.set(this_pt);
+        cnt++;
+
+        // add neighbors if within radius
+        if(r+1 <= radius){
+            size_t begin, end;
+            neighbor_range(this_pt, level, &begin, &end);
+            for (size_t i = begin; i < end; i++) {
+                storage_idx_t nb = neighbors[i];
+                if (nb < 0)
+                    break;
+                if (!vt.get(nb)){
+                    buffer.push(std::make_pair(nb, r+1));
+                }
+            }
+        }
+
+    }
+
+    // std::cout << "cnt: " << cnt << std::endl;
+
+}
+
+void HNSW::mark_cluster_top_k(
+    storage_idx_t entry_point, 
+    int level, 
+    VisitedTable &vt, 
+    std::vector<int> &to_block_id,
+    int block_id, 
+    int k){
+
+}
+
+void HNSW::greedy_assign(size_t ntotal, VisitedTable &vt, std::vector<int> &to_block_id){
+    std::vector<storage_idx_t> node_ids(ntotal);
+
+    for(int i = 0; i < ntotal; i++){
+        node_ids[i] = i;
+    }
+
+    // Shuffling 
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::shuffle(node_ids.begin(), node_ids.end(), gen);
+
+
+    // Generate Blocks by randomly select unvisited node a connect all unvisited neighbors in to a block
+    // Greedy add neighbors into a block
+
+    int block_id = 0;
+    int max_block_size = 32;
+    int max_steps = 1;
+
+    for(int i = 0; i < ntotal; i++){
+        storage_idx_t id = node_ids[i];
+        if(vt.get(id)){
+            continue;
+        }
+
+        mark_cluster_radius(
+            id, 
+            0, 
+            vt,
+            to_block_id,
+            block_id,
+            2
+        );
+
+        block_id++;
+    }
+
+    std::cout << "max block id: " << block_id << std::endl;
+
+}
+
+void HNSW::test(){
+    size_t ntotal = levels.size();
+    std::cout << "---------------  HNSW Experiments -------------- "  << std::endl;
+    std::cout << "- ntotal: " << ntotal << std::endl;
+
+    VisitedTable vt(ntotal);
+
+    std::vector<int> to_block_id(ntotal);
+
+    greedy_assign(ntotal, vt, to_block_id);
+
+    // for(int i = 0; i < 10; i++){
+    //     std::cout << to_block_id[i] << std::endl;
+    // }
+
+    for(int i =0; i < ntotal; i++){
+        block_mapping.push_back(to_block_id[i]);
+    }
+
+     std::cout << "Done!" << std::endl;
 }
 
 /**************************************************************

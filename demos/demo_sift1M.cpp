@@ -19,6 +19,8 @@
 
 #include <faiss/AutoTune.h>
 #include <faiss/index_factory.h>
+#include <faiss/index_io.h>
+#include <faiss/IndexHNSW.h>
 
 #define TUNING false
 
@@ -114,25 +116,28 @@ int main() {
     //     delete[] xt;
     // }
 
-    {
-        printf("[%.3f s] Loading database\n", elapsed() - t0);
+    // {
+    //     printf("[%.3f s] Loading database\n", elapsed() - t0);
 
-        size_t nb, d2;
-        float* xb = fvecs_read("/home/gcpuser/clive/dataset/TripClick/base.fvecs", &d2, &nb);
-        d = d2;
-        assert(d == d2 || !"dataset does not have same dimension as train set");
+    //     size_t nb, d2;
+    //     float* xb = fvecs_read("/home/gcpuser/clive/downloads/msmarco/base.fvecs", &d2, &nb);
+    //     d = d2;
+    //     assert(d == d2 || !"dataset does not have same dimension as train set");
 
-        printf("[%.3f s] Indexing database, size %ld*%ld\n",
-               elapsed() - t0,
-               nb,
-               d);
+    //     printf("[%.3f s] Indexing database, size %ld*%ld\n",
+    //            elapsed() - t0,
+    //            nb,
+    //            d);
 
-        index = faiss::index_factory(d, index_key);
+    //     index = faiss::index_factory(d, index_key);
 
-        index->add(nb, xb);
+    //     index->add(nb, xb);
 
-        delete[] xb;
-    }
+    //     delete[] xb;
+    // }
+
+    d = 128;
+    index = faiss::read_index("./sift_hnsw.index", 0);
 
     size_t nq;
     float* xq;
@@ -141,7 +146,7 @@ int main() {
         printf("[%.3f s] Loading queries\n", elapsed() - t0);
 
         size_t d2;
-        xq = fvecs_read("/home/gcpuser/clive/dataset/TripClick/query.fvecs", &d2, &nq);
+        xq = fvecs_read("/home/gcpuser/clive/downloads/sift/query.fvecs", &d2, &nq);
         assert(d == d2 || !"query does not have same dimension as train set");
     }
 
@@ -150,22 +155,22 @@ int main() {
 
     k = 10;
 
-    // {
-    //     printf("[%.3f s] Loading ground truth for %ld queries\n",
-    //            elapsed() - t0,
-    //            nq);
+    {
+        printf("[%.3f s] Loading ground truth for %ld queries\n",
+               elapsed() - t0,
+               nq);
 
-    //     // load ground-truth and convert int to long
-    //     size_t nq2;
-    //     int* gt_int = ivecs_read("/home/gcpuser/clive/dataset/TripClick/sift_groundtruth.ivecs", &k, &nq2);
-    //     assert(nq2 == nq || !"incorrect nb of ground truth entries");
+        // load ground-truth and convert int to long
+        size_t nq2;
+        int* gt_int = ivecs_read("/home/gcpuser/clive/downloads/sift/gt.ivecs", &k, &nq2);
+        assert(nq2 == nq || !"incorrect nb of ground truth entries");
 
-    //     gt = new faiss::idx_t[k * nq];
-    //     for (int i = 0; i < k * nq; i++) {
-    //         gt[i] = gt_int[i];
-    //     }
-    //     delete[] gt_int;
-    // }
+        gt = new faiss::idx_t[k * nq];
+        for (int i = 0; i < k * nq; i++) {
+            gt[i] = gt_int[i];
+        }
+        delete[] gt_int;
+    }
 
     // Result of the auto-tuning
     std::string selected_params;
@@ -211,58 +216,57 @@ int main() {
     //            !"could not find good enough op point");
     // }
 
+    ((faiss::IndexHNSW* )index)->hnsw.test();
+
     { // Use the found configuration to perform a search
 
-        // if (TUNING) { 
+        faiss::ParameterSpace params;
 
-        // faiss::ParameterSpace params;
-        //     printf("[%.3f s] Setting parameter configuration \"%s\" on index\n",
-        //         elapsed() - t0,
-        //         selected_params.c_str());
+        printf("[%.3f s] Setting parameter configuration \"%s\" on index\n",
+               elapsed() - t0,
+               selected_params.c_str());
 
-        //     params.set_index_parameters(index, selected_params.c_str());
-        // }
+        params.set_index_parameters(index, selected_params.c_str());
 
+        printf("[%.3f s] Perform a search on %ld queries\n",
+               elapsed() - t0,
+               nq);
 
         // output buffers
         faiss::idx_t* I = new faiss::idx_t[nq * k];
         float* D = new float[nq * k];
 
-        printf("[%.3f s] Perform a search on %ld queries\n",
-               elapsed() - t0,
-               1);
-
-        for(int i = 0; i < 1000; i++){
-            index->search(1, xq, k, D, I);
-        }
+        index->search(nq, xq, k, D, I);
 
         printf("[%.3f s] Compute recalls\n", elapsed() - t0);
 
-        // // evaluate result by hand.
-        // int n_1 = 0, n_10 = 0, n_100 = 0;
-        // for (int i = 0; i < nq; i++) {
-        //     int gt_nn = gt[i * k];
-        //     for (int j = 0; j < k; j++) {
-        //         if (I[i * k + j] == gt_nn) {
-        //             if (j < 1)
-        //                 n_1++;
-        //             if (j < 10)
-        //                 n_10++;
-        //             if (j < 100)
-        //                 n_100++;
-        //         }
-        //     }
-        // }
-        // printf("R@1 = %.4f\n", n_1 / float(nq));
-        // printf("R@10 = %.4f\n", n_10 / float(nq));
-        // printf("R@100 = %.4f\n", n_100 / float(nq));
+        // evaluate result by hand.
+        int n_1 = 0, n_10 = 0, n_100 = 0;
+        for (int i = 0; i < nq; i++) {
+            int gt_nn = gt[i * k];
+            for (int j = 0; j < k; j++) {
+                if (I[i * k + j] == gt_nn) {
+                    if (j < 1)
+                        n_1++;
+                    if (j < 10)
+                        n_10++;
+                    if (j < 100)
+                        n_100++;
+                }
+            }
+        }
+        printf("R@1 = %.4f\n", n_1 / float(nq));
+        printf("R@10 = %.4f\n", n_10 / float(nq));
+        printf("R@100 = %.4f\n", n_100 / float(nq));
 
         delete[] I;
         delete[] D;
     }
 
+    // write_index(index, "./msmarco_hnsw.index");
+
     delete[] xq;
-    // delete[] gt;
+    delete[] gt;
     delete index;
     return 0;
 }
