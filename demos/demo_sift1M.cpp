@@ -36,6 +36,51 @@
  * I/O functions for fvecs and ivecs
  *****************************************************/
 
+// ground truth labels @gt, results to evaluate @I with @nq queries, returns @gt_size-Recall@k where gt had max gt_size NN's per query
+float compute_recall(faiss::idx_t* gt, int gt_size, faiss::idx_t* I, int nq, int k, int gamma=1) {
+    // printf("compute_recall params: gt.size(): %ld, gt_size: %d, I.size(): %ld, nq: %d, k: %d, gamma: %d\n", gt.size(), gt_size, I.size(), nq, k, gamma);
+    int n_1 = 0, n_10 = 0, n_100 = 0;
+    for (int i = 0; i < nq; i++) { // loop over all queries
+        // int gt_nn = gt[i * k];
+        faiss::idx_t* first = gt + i*gt_size;
+        faiss::idx_t* last = gt + i*gt_size + (k / gamma);
+        std::vector<faiss::idx_t> gt_nns_tmp(first, last);
+        // if (gt_nns_tmp.size() > 10) {
+        //     printf("gt_nns size: %ld\n", gt_nns_tmp.size());
+        // }
+        // gt_nns_tmp.resize(k); // truncate if gt_size > k
+        // std::set<faiss::idx_t> gt_nns_100(gt_nns_tmp.begin(), gt_nns_tmp.end());
+        // gt_nns_tmp.resize(10);
+        std::set<faiss::idx_t> gt_nns_10(gt_nns_tmp.begin(), gt_nns_tmp.end());
+        gt_nns_tmp.resize(1);
+        std::set<faiss::idx_t> gt_nns_1(gt_nns_tmp.begin(), gt_nns_tmp.end());
+        // if (gt_nns.size() > 10) {
+        //     printf("gt_nns size: %ld\n", gt_nns.size());
+        // }
+        for (int j = 0; j < k; j++) { // iterate over returned nn results
+            // if (gt_nns_100.count(I[i * k + j])!=0) {
+            //     if (j < 100 * gamma)
+            //         n_100++;
+            // }
+            if (gt_nns_10.count(I[i * k + j])!=0) {
+                if (j < 10 * gamma)
+                    n_10++;
+            }
+            if (gt_nns_1.count(I[i * k + j])!=0) {
+                if (j < 1 * gamma)
+                    n_1++;
+            }
+        }
+    }
+    // BASE ACCURACY
+    printf("* Base HNSW accuracy relative to exact search:\n");
+    printf("\tR@1 = %.4f\n", n_1 / float(nq) );
+    printf("\tR@10 = %.4f\n", n_10 / float(nq));
+    // printf("\tR@100 = %.4f\n", n_100 / float(nq)); // not sure why this is always same as R@10
+    // printf("\t---Results for %ld queries, k=%d, N=%ld, gt_size=%d\n", nq, k, N, gt_size);
+    return (n_10 / float(nq));
+}
+
 float* fvecs_read(const char* fname, size_t* d_out, size_t* n_out) {
     FILE* f = fopen(fname, "r");
     if (!f) {
@@ -82,7 +127,7 @@ int main() {
     double t0 = elapsed();
 
     // this is typically the fastest one.
-    const char* index_key = "HNSW32,Flat";
+    const char* index_key = "HNSW32";
 
     // these ones have better memory usage
     // const char *index_key = "Flat";
@@ -102,7 +147,7 @@ int main() {
     //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
 
     //     size_t nt;
-    //     float* xt = fvecs_read("/home/gcpuser/clive/dataset/TripClick/sift_learn.fvecs", &d, &nt);
+    //     float* xt = fvecs_read("/home/gcpuser/dataset/TripClick/sift_learn.fvecs", &d, &nt);
 
     //     printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
     //            elapsed() - t0,
@@ -116,28 +161,28 @@ int main() {
     //     delete[] xt;
     // }
 
-    // {
-    //     printf("[%.3f s] Loading database\n", elapsed() - t0);
+    {
+        printf("[%.3f s] Loading database\n", elapsed() - t0);
 
-    //     size_t nb, d2;
-    //     float* xb = fvecs_read("/home/gcpuser/clive/downloads/msmarco/base.fvecs", &d2, &nb);
-    //     d = d2;
-    //     assert(d == d2 || !"dataset does not have same dimension as train set");
+        size_t nb, d2;
+        float* xb = fvecs_read("/home/gcpuser/downloads/sift/base.fvecs", &d2, &nb);
+        d = d2;
+        assert(d == d2 || !"dataset does not have same dimension as train set");
 
-    //     printf("[%.3f s] Indexing database, size %ld*%ld\n",
-    //            elapsed() - t0,
-    //            nb,
-    //            d);
+        printf("[%.3f s] Indexing database, size %ld*%ld\n",
+               elapsed() - t0,
+               nb,
+               d);
 
-    //     index = faiss::index_factory(d, index_key);
+        index = faiss::index_factory(d, index_key);
 
-    //     index->add(nb, xb);
+        index->add(nb, xb);
 
-    //     delete[] xb;
-    // }
+        delete[] xb;
+    }
 
-    d = 128;
-    index = faiss::read_index("./sift_hnsw.index", 0);
+    // d = 128;
+    // index = faiss::read_index("./sift_hnsw.index", 0);
 
     size_t nq;
     float* xq;
@@ -146,14 +191,14 @@ int main() {
         printf("[%.3f s] Loading queries\n", elapsed() - t0);
 
         size_t d2;
-        xq = fvecs_read("/home/gcpuser/clive/downloads/sift/query.fvecs", &d2, &nq);
+        xq = fvecs_read("/home/gcpuser/downloads/sift/query.fvecs", &d2, &nq);
         assert(d == d2 || !"query does not have same dimension as train set");
     }
 
     size_t k;         // nb of results per query in the GT
     faiss::idx_t* gt; // nq * k matrix of ground-truth nearest-neighbors
 
-    k = 10;
+    // k = 10;
 
     {
         printf("[%.3f s] Loading ground truth for %ld queries\n",
@@ -162,7 +207,7 @@ int main() {
 
         // load ground-truth and convert int to long
         size_t nq2;
-        int* gt_int = ivecs_read("/home/gcpuser/clive/downloads/sift/gt.ivecs", &k, &nq2);
+        int* gt_int = ivecs_read("/home/gcpuser/downloads/sift/gt.ivecs", &k, &nq2);
         assert(nq2 == nq || !"incorrect nb of ground truth entries");
 
         gt = new faiss::idx_t[k * nq];
@@ -170,6 +215,20 @@ int main() {
             gt[i] = gt_int[i];
         }
         delete[] gt_int;
+    }
+
+    {
+        // We only need k = 10
+        int k0 = 10;
+        faiss::idx_t* gt0 = new faiss::idx_t[k0 * nq];
+        for(int i = 0; i < nq; i++){
+            for(int j = 0; j < k0; j++){
+                gt0[i*k0 + j] = gt[i*k + j];
+            }
+        }
+
+        k = k0;
+        gt = gt0;
     }
 
     // Result of the auto-tuning
@@ -240,24 +299,32 @@ int main() {
 
         printf("[%.3f s] Compute recalls\n", elapsed() - t0);
 
+        compute_recall(
+            gt,
+            k,
+            I,
+            nq,
+            k
+        );
+
         // evaluate result by hand.
-        int n_1 = 0, n_10 = 0, n_100 = 0;
-        for (int i = 0; i < nq; i++) {
-            int gt_nn = gt[i * k];
-            for (int j = 0; j < k; j++) {
-                if (I[i * k + j] == gt_nn) {
-                    if (j < 1)
-                        n_1++;
-                    if (j < 10)
-                        n_10++;
-                    if (j < 100)
-                        n_100++;
-                }
-            }
-        }
-        printf("R@1 = %.4f\n", n_1 / float(nq));
-        printf("R@10 = %.4f\n", n_10 / float(nq));
-        printf("R@100 = %.4f\n", n_100 / float(nq));
+        // int n_1 = 0, n_10 = 0, n_100 = 0;
+        // for (int i = 0; i < nq; i++) {
+        //     int gt_nn = gt[i * k];
+        //     for (int j = 0; j < k; j++) {
+        //         if (I[i * k + j] == gt_nn) {
+        //             if (j < 1)
+        //                 n_1++;
+        //             if (j < 10)
+        //                 n_10++;
+        //             if (j < 100)
+        //                 n_100++;
+        //         }
+        //     }
+        // }
+        // printf("R@1 = %.4f\n", n_1 / float(nq));
+        // printf("R@10 = %.4f\n", n_10 / float(nq));
+        // printf("R@100 = %.4f\n", n_100 / float(nq));
 
         delete[] I;
         delete[] D;
