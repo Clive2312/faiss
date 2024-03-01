@@ -160,6 +160,14 @@ struct Distance2Level : DistanceComputer {
     void set_query(const float* x) override {
         q = x;
     }
+
+    const float* get_query() override {
+        return q;
+    }
+
+    float* get_node(idx_t i) override {
+        return NULL;
+    }
 };
 
 // well optimized for xNN+PQNN

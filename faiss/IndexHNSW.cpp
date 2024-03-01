@@ -34,6 +34,8 @@
 #include <faiss/utils/random.h>
 #include <faiss/utils/sorting.h>
 
+#include <iostream>
+
 extern "C" {
 
 /* declare BLAS functions, see http://www.netlib.org/clapack/cblas/ */
@@ -80,6 +82,16 @@ struct NegativeDistanceComputer : DistanceComputer {
 
     void set_query(const float* x) override {
         basedis->set_query(x);
+    }
+
+    const float* get_query() override {
+        std::cout << "get qeury" << std::endl;
+        return basedis->get_query();
+    }
+
+    float* get_node(idx_t i) override {
+        std::cout << "get node" << std::endl;
+        return basedis->get_node(i);
     }
 
     /// compute distance of vector i to current query
@@ -309,9 +321,10 @@ void IndexHNSW::search(
                 idx_t* idxi = labels + i * k;
                 float* simi = distances + i * k;
                 dis->set_query(x + i * d);
+                const float* q = x + i * d;
 
                 maxheap_heapify(k, simi, idxi);
-                HNSWStats stats = hnsw.search(*dis, k, idxi, simi, vt, params);
+                HNSWStats stats = hnsw.search(q, storage, *dis, k, idxi, simi, vt, params);
                 n1 += stats.n1;
                 n2 += stats.n2;
                 n3 += stats.n3;

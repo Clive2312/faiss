@@ -49,6 +49,14 @@ struct NegativeDistanceComputer : DistanceComputer {
         return -basedis->symmetric_dis(i, j);
     }
 
+    const float* get_query() override {
+        return NULL;
+    }
+
+    float* get_node(idx_t i) override {
+        return NULL;
+    }
+
     ~NegativeDistanceComputer() override {
         delete basedis;
     }

@@ -312,6 +312,14 @@ struct PreTransformDistanceComputer : DistanceComputer {
         }
     }
 
+    const float* get_query() override {
+        return NULL;
+    }
+
+    float* get_node(idx_t i) override {
+        return NULL;
+    }
+
     float symmetric_dis(idx_t i, idx_t j) override {
         return sub_dc->symmetric_dis(i, j);
     }

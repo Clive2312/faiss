@@ -19,6 +19,7 @@
 #include <faiss/impl/platform_macros.h>
 
 #include <iostream>
+#include <algorithm>
 
 #ifdef __AVX2__
 #include <immintrin.h>
@@ -520,7 +521,108 @@ using MinimaxHeap = HNSW::MinimaxHeap;
 using Node = HNSW::Node;
 /** Do a BFS on the candidates list */
 
-int search_from_candidates(
+struct MyComparator
+{
+    const std::vector<int> & value_vector;
+
+    MyComparator(const std::vector<int> & val_vec):
+        value_vector(val_vec) {}
+
+    bool operator()(int i1, int i2)
+    {
+        return value_vector[i1] > value_vector[i2];
+    }
+};
+
+std::vector<int> direction_guess(
+    const float* q,
+    faiss::Index* storage,
+    const HNSW& hnsw,
+    DistanceComputer& qdis,
+    int center,
+    int begin,
+    int end) {
+
+    int d = 128;
+    
+    // const float* q = qdis.get_query();
+
+    float* x = new float[d];
+    storage->reconstruct(center, x);
+
+    std::vector<bool> dir_q;
+
+    for(int i = 0; i < d; i++){
+        dir_q.push_back(q[i] > x[i]);
+    }
+
+    std::vector<int> scores;
+    std::vector<int> nbs;
+
+    for (size_t j = begin; j < end; j++) {
+        int v1 = hnsw.neighbors[j];
+        if (v1 < 0)
+            break;
+
+        float* nb = new float[d];
+        storage->reconstruct(v1, nb);
+
+        int score = 0;
+
+        for(int i = 0; i < d; i++){
+            bool tmp = nb[i] > x[i];
+            if(tmp == dir_q[i]){
+                score += 1;
+            }
+        }
+        nbs.push_back(v1);
+        scores.push_back(score);
+
+        delete[] nb;
+    }
+
+    // for (int i = 0; i < nbs.size(); ++i)
+    //     std::cout << nbs[i] << " ";
+
+    // std::cout << std::endl;
+
+    // for (int i = 0; i < nbs.size(); ++i)
+    //     std::cout << scores[i] << " ";
+
+    // std::cout << std::endl;
+
+    // std::cout << "sorting " << nbs.size() << " " << scores.size() << std::endl;
+
+    std::vector<std::pair<int, int>> AB;
+    for (size_t i = 0; i < nbs.size(); ++i) {
+        AB.push_back(std::make_pair(scores[i], nbs[i]));
+    }
+
+    std::sort(AB.begin(), AB.end());
+
+    for (size_t i = 0; i < AB.size(); ++i) {
+        nbs[i] = AB[AB.size() - 1 - i].second;
+    }
+
+    // std::sort(nbs.begin(), nbs.end(), MyComparator(scores));
+
+    // std::cout << "done" << std::endl;
+
+    // for (int i = 0; i < nbs.size(); ++i)
+    //     std::cout << nbs[i] << " ";
+
+    // std::cout << std::endl;
+
+    // assert(0);
+
+    delete[] x;
+
+    return nbs;
+}
+
+int search_from_candidates_direction(
+        const float* q,
+        faiss::Index* storage,
         const HNSW& hnsw,
         DistanceComputer& qdis,
         int k,
@@ -577,6 +679,115 @@ int search_from_candidates(
         size_t begin, end;
         hnsw.neighbor_range(v0, level, &begin, &end);
 
+        std::vector<int> batch = direction_guess(
+            q,
+            storage,
+            hnsw,
+            qdis,
+            v0,
+            begin,
+            end
+        );
+
+        // baseline version
+        // for (size_t j = begin; j < end; j++) {
+        //     int v1 = hnsw.neighbors[j];
+        int cnt = 0;
+        for(size_t j = 0 ; j < batch.size(); j++){
+            if(cnt >= 4){
+                break;
+            }
+            int v1 = batch[j];
+            if (vt.get(v1)) {
+                continue;
+            }
+            cnt++;
+            vt.set(v1);
+            ndis++;
+            float d = qdis(v1);
+            if (!sel || sel->is_member(v1)) {
+                if (nres < k) {
+                    faiss::maxheap_push(++nres, D, I, d, v1);
+                } else if (d < D[0]) {
+                    faiss::maxheap_replace_top(nres, D, I, d, v1);
+                }
+            }
+            candidates.push(v1, d);
+        }
+
+        nstep++;
+        if (!do_dis_check && nstep > efSearch) {
+            break;
+        }
+    }
+
+    if (level == 0) {
+        stats.n1++;
+        if (candidates.size() == 0) {
+            stats.n2++;
+        }
+        stats.n3 += ndis;
+    }
+
+    return nres;
+}
+
+int search_from_candidates(
+        const HNSW& hnsw,
+        DistanceComputer& qdis,
+        int k,
+        idx_t* I,
+        float* D,
+        MinimaxHeap& candidates,
+        VisitedTable& vt,
+        HNSWStats& stats,
+        int level,
+        int nres_in = 0,
+        const SearchParametersHNSW* params = nullptr) {
+    int nres = nres_in;
+    int ndis = 0;
+
+    // can be overridden by search params
+    bool do_dis_check = params ? params->check_relative_distance
+                               : hnsw.check_relative_distance;
+    int efSearch = params ? params->efSearch : hnsw.efSearch;
+    const IDSelector* sel = params ? params->sel : nullptr;
+
+    for (int i = 0; i < candidates.size(); i++) {
+        idx_t v1 = candidates.ids[i];
+        float d = candidates.dis[i];
+        FAISS_ASSERT(v1 >= 0);
+        if (!sel || sel->is_member(v1)) {
+            if (nres < k) {
+                faiss::maxheap_push(++nres, D, I, d, v1);
+            } else if (d < D[0]) {
+                faiss::maxheap_replace_top(nres, D, I, d, v1);
+            }
+        }
+        vt.set(v1);
+    }
+
+    int nstep = 0;
+
+    do_dis_check = false;
+
+    while (candidates.size() > 0) {
+        float d0 = 0;
+        int v0 = candidates.pop_min(&d0);
+
+        if (do_dis_check) {
+            // tricky stopping condition: there are more that ef
+            // distances that are processed already that are smaller
+            // than d0
+
+            int n_dis_below = candidates.count_below(d0);
+            if (n_dis_below >= efSearch) {
+                break;
+            }
+        }
+
+        size_t begin, end;
+        hnsw.neighbor_range(v0, level, &begin, &end);
         // // baseline version
         // for (size_t j = begin; j < end; j++) {
         //     int v1 = hnsw.neighbors[j];
@@ -812,6 +1023,28 @@ HNSWStats HNSW::search(
         float* D,
         VisitedTable& vt,
         const SearchParametersHNSW* params) const {
+
+    return search(
+        NULL,
+        NULL,
+        qdis,
+        k,
+        I,
+        D,
+        vt,
+        params
+    );
+}
+
+HNSWStats HNSW::search(
+        const float* q,
+        faiss::Index* storage,
+        DistanceComputer& qdis,
+        int k,
+        idx_t* I,
+        float* D,
+        VisitedTable& vt,
+        const SearchParametersHNSW* params) const {
     HNSWStats stats;
     if (entry_point == -1) {
         return stats;
@@ -832,8 +1065,8 @@ HNSWStats HNSW::search(
 
             candidates.push(nearest, d_nearest);
 
-            search_from_candidates(
-                    *this, qdis, k, I, D, candidates, vt, stats, 0, 0, params);
+            search_from_candidates_direction(
+                    q, storage, *this, qdis, k, I, D, candidates, vt, stats, 0, 0, params);
         } else {
             std::priority_queue<Node> top_candidates =
                     search_from_candidate_unbounded(

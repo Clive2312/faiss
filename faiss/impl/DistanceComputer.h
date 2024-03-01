@@ -56,6 +56,10 @@ struct DistanceComputer {
     /// compute distance between two stored vectors
     virtual float symmetric_dis(idx_t i, idx_t j) = 0;
 
+    virtual const float* get_query() = 0;
+
+    virtual float* get_node(idx_t i) = 0;
+
     virtual ~DistanceComputer() {}
 };
 
@@ -74,6 +78,14 @@ struct FlatCodesDistanceComputer : DistanceComputer {
 
     float operator()(idx_t i) override {
         return distance_to_code(codes + i * code_size);
+    }
+
+    const float* get_query() override {
+        return NULL;
+    }
+
+    float* get_node(idx_t i) override {
+        return NULL;
     }
 
     /// compute distance of current query to an encoded vector

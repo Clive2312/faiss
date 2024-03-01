@@ -15,6 +15,7 @@
 #include <faiss/utils/distances.h>
 
 #include <cstring>
+#include <iostream>
 
 namespace faiss {
 
@@ -161,6 +162,18 @@ struct GenericDistanceComputer : DistanceComputer {
 
     void set_query(const float* x) override {
         q = x;
+    }
+
+    const float* get_query() override {
+        std::cout << "get qeury 1" << std::endl;
+        return q;
+    }
+
+    float* get_node(idx_t i) override {
+        std::cout << "get node 1" << std::endl;
+        float* x = new float[d];
+        storage.reconstruct(i, x);
+        return x;
     }
 };
 

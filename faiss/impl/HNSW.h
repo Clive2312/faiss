@@ -194,6 +194,16 @@ struct HNSW {
 
     /// search interface for 1 point, single thread
     HNSWStats search(
+            const float* q,
+            faiss::Index* storage,
+            DistanceComputer& qdis,
+            int k,
+            idx_t* I,
+            float* D,
+            VisitedTable& vt,
+            const SearchParametersHNSW* params = nullptr) const;
+    
+    HNSWStats search(
             DistanceComputer& qdis,
             int k,
             idx_t* I,

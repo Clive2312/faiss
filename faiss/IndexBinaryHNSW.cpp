@@ -275,6 +275,14 @@ struct FlatHammingDis : DistanceComputer {
         hc.set((uint8_t*)x, code_size);
     }
 
+    const float* get_query() override {
+        return NULL;
+    }
+
+    float* get_node(idx_t i) override {
+        return NULL;
+    }
+
     ~FlatHammingDis() override {
 #pragma omp critical
         { hnsw_stats.ndis += ndis; }
