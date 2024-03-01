@@ -11,12 +11,7 @@
 
 #include <queue>
 #include <unordered_set>
-#include <map>
-#include <set>
 #include <vector>
-#include <iostream>
-#include <algorithm>  
-#include <random>     
 
 #include <omp.h>
 
@@ -123,12 +118,6 @@ struct HNSW {
     /// neighbors[offsets[i]:offsets[i+1]] is the list of neighbors of vector i
     /// for all levels. this is where all storage goes.
     std::vector<storage_idx_t> neighbors;
-
-    /// stats
-    std::map<int, std::vector<int>> steps_cnt;
-
-    /// stats
-    std::vector<storage_idx_t> block_mapping;
 
     /// entry point in the search structure (one of the points with maximum
     /// level
@@ -239,12 +228,6 @@ struct HNSW {
             int max_size);
 
     void permute_entries(const idx_t* map);
-
-    void greedy_assign(size_t ntotal, VisitedTable &vt, std::vector<int> &to_block_id);
-    void mark_cluster_radius(storage_idx_t entry_point, int level, VisitedTable &vt, std::vector<int> &to_block_id, int block_id, int radius);
-    void mark_cluster_top_k(storage_idx_t entry_point, int level, VisitedTable &vt, std::vector<int> &to_block_id, int block_id, int k);
-
-    void test();
 };
 
 struct HNSWStats {
