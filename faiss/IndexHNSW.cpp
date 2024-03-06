@@ -314,6 +314,7 @@ void IndexHNSW::search(
             VisitedTable vt(ntotal);
 
             DistanceComputer* dis = storage_distance_computer(storage);
+            DistanceComputer* qdis = storage_distance_computer(pq_storage);
             ScopeDeleter1<DistanceComputer> del(dis);
 
 #pragma omp for reduction(+ : n1, n2, n3, ndis, nreorder) schedule(guided)
@@ -324,7 +325,7 @@ void IndexHNSW::search(
                 const float* q = x + i * d;
 
                 maxheap_heapify(k, simi, idxi);
-                HNSWStats stats = hnsw.search(q, storage, *dis, k, idxi, simi, vt, params);
+                HNSWStats stats = hnsw.search(q, storage, *dis, *qdis, k, idxi, simi, vt, params);
                 n1 += stats.n1;
                 n2 += stats.n2;
                 n3 += stats.n3;
@@ -625,6 +626,10 @@ void IndexHNSW::permute_entries(const idx_t* perm) {
             flat_storage, "don't know how to permute this index");
     flat_storage->permute_entries(perm);
     hnsw.permute_entries(perm);
+}
+
+void IndexHNSW::set_quantize_storage(Index* quantize){
+    pq_storage = quantize;
 }
 
 /**************************************************************

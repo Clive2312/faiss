@@ -76,6 +76,7 @@ struct IndexHNSW : Index {
     // the sequential storage
     bool own_fields = false;
     Index* storage = nullptr;
+    Index* pq_storage = nullptr;
 
     ReconstructFromNeighbors* reconstruct_from_neighbors = nullptr;
 
@@ -136,6 +137,8 @@ struct IndexHNSW : Index {
     void link_singletons();
 
     void permute_entries(const idx_t* perm);
+
+    void set_quantize_storage(Index* quantize);
 };
 
 /** Flat index topped with with a HNSW structure to access elements

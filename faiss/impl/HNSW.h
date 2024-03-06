@@ -197,6 +197,7 @@ struct HNSW {
             const float* q,
             faiss::Index* storage,
             DistanceComputer& qdis,
+            DistanceComputer& quantize_qdis,
             int k,
             idx_t* I,
             float* D,

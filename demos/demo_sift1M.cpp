@@ -143,6 +143,32 @@ int main() {
 
     size_t d;
 
+    faiss::Index* pq_index;
+
+    {
+        const char* pq_index_key = "PQ32";
+        printf("[%.3f s] Loading train set\n", elapsed() - t0);
+
+        size_t nt;
+        float* xt = fvecs_read("../../../downloads/sift/base.fvecs", &d, &nt);
+
+        printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
+               elapsed() - t0,
+               index_key,
+               d);
+        pq_index = faiss::index_factory(d, pq_index_key);
+
+        dynamic_cast<faiss::IndexPQ*>(pq_index)->do_polysemous_training = false;
+
+        printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
+
+        pq_index->train(nt, xt);
+
+        dynamic_cast<faiss::IndexPQ*>(pq_index)->pq.compute_sdc_table();
+        delete[] xt;
+
+    }
+
     // {
     //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
 
@@ -161,28 +187,33 @@ int main() {
     //     delete[] xt;
     // }
 
-    {
-        printf("[%.3f s] Loading database\n", elapsed() - t0);
+    // {
+    //     printf("[%.3f s] Loading database\n", elapsed() - t0);
 
-        size_t nb, d2;
-        float* xb = fvecs_read("../../..//downloads/sift/base.fvecs", &d2, &nb);
-        d = d2;
-        assert(d == d2 || !"dataset does not have same dimension as train set");
+    //     size_t nb, d2;
+    //     float* xb = fvecs_read("../../..//downloads/sift/base.fvecs", &d2, &nb);
+    //     d = d2;
+    //     assert(d == d2 || !"dataset does not have same dimension as train set");
 
-        printf("[%.3f s] Indexing database, size %ld*%ld\n",
-               elapsed() - t0,
-               nb,
-               d);
+    //     printf("[%.3f s] Indexing database, size %ld*%ld\n",
+    //            elapsed() - t0,
+    //            nb,
+    //            d);
 
-        index = faiss::index_factory(d, index_key);
+    //     index = faiss::index_factory(d, index_key);
 
-        index->add(nb, xb);
+    //     index->add(nb, xb);
 
-        delete[] xb;
-    }
+    //     delete[] xb;
+    // }
 
-    // d = 128;
-    // index = faiss::read_index("./sift_hnsw.index", 0);
+    index = faiss::read_index("../../../downloads/sift/index/hnsw_32.index", 0);
+    d = 128;
+
+    ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
+
+    // faiss::write_index(index, "../../../downloads/sift/index/hnsw_32.index");
+    // return 0;
 
     size_t nq;
     float* xq;
@@ -289,7 +320,7 @@ int main() {
 
         // output buffers
 
-        for(int efs = 8; efs <= 256; efs*=2){
+        for(int efs = 32; efs <= 32; efs*=2){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
