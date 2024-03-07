@@ -150,7 +150,7 @@ int main() {
         printf("[%.3f s] Loading train set\n", elapsed() - t0);
 
         size_t nt;
-        float* xt = fvecs_read("../../../downloads/sift/base.fvecs", &d, &nt);
+        float* xt = fvecs_read("../../../../downloads/sift/learn.fvecs", &d, &nt);
 
         printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
                elapsed() - t0,
@@ -158,22 +158,28 @@ int main() {
                d);
         pq_index = faiss::index_factory(d, pq_index_key);
 
-        dynamic_cast<faiss::IndexPQ*>(pq_index)->do_polysemous_training = false;
+        // dynamic_cast<faiss::IndexPQ*>(pq_index)->do_polysemous_training = false;
 
         printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
 
         pq_index->train(nt, xt);
 
         dynamic_cast<faiss::IndexPQ*>(pq_index)->pq.compute_sdc_table();
-        delete[] xt;
 
+        size_t nb, d2;
+        float* xb = fvecs_read("../../../../downloads/sift/base.fvecs", &d2, &nb);
+
+        pq_index->add(nb, xb);
+
+        delete[] xt;
+        delete[] xb;
     }
 
     // {
     //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
 
     //     size_t nt;
-    //     float* xt = fvecs_read("../../..//dataset/TripClick/sift_learn.fvecs", &d, &nt);
+    //     float* xt = fvecs_read("../../../..//dataset/TripClick/sift_learn.fvecs", &d, &nt);
 
     //     printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
     //            elapsed() - t0,
@@ -191,7 +197,7 @@ int main() {
     //     printf("[%.3f s] Loading database\n", elapsed() - t0);
 
     //     size_t nb, d2;
-    //     float* xb = fvecs_read("../../..//downloads/sift/base.fvecs", &d2, &nb);
+    //     float* xb = fvecs_read("../../../../downloads/sift/base.fvecs", &d2, &nb);
     //     d = d2;
     //     assert(d == d2 || !"dataset does not have same dimension as train set");
 
@@ -207,13 +213,15 @@ int main() {
     //     delete[] xb;
     // }
 
-    index = faiss::read_index("../../../downloads/sift/index/hnsw_32.index", 0);
+    // index = faiss::read_index("../../../../downloads/sift/index/hnsw_32.index", 0);
+    // pq_index = faiss::read_index("../../../../downloads/sift/index/pq_4.index", 0);
     d = 128;
 
-    ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
+    // ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
 
-    // faiss::write_index(index, "../../../downloads/sift/index/hnsw_32.index");
-    // return 0;
+    // faiss::write_index(index, "../../../../downloads/sift/index/hnsw_32.index");
+    faiss::write_index(pq_index, "../../../../downloads/sift/index/pq_32.index");
+    return 0;
 
     size_t nq;
     float* xq;
@@ -222,7 +230,7 @@ int main() {
         printf("[%.3f s] Loading queries\n", elapsed() - t0);
 
         size_t d2;
-        xq = fvecs_read("../../..//downloads/sift/query.fvecs", &d2, &nq);
+        xq = fvecs_read("../../../..//downloads/sift/query.fvecs", &d2, &nq);
         assert(d == d2 || !"query does not have same dimension as train set");
     }
 
@@ -238,7 +246,7 @@ int main() {
 
         // load ground-truth and convert int to long
         size_t nq2;
-        int* gt_int = ivecs_read("../../..//downloads/sift/gt.ivecs", &k, &nq2);
+        int* gt_int = ivecs_read("../../../..//downloads/sift/gt.ivecs", &k, &nq2);
         assert(nq2 == nq || !"incorrect nb of ground truth entries");
 
         gt = new faiss::idx_t[k * nq];

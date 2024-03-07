@@ -661,6 +661,7 @@ int search_from_candidates_direction_beam(
         faiss::Index* storage,
         const HNSW& hnsw,
         DistanceComputer& qdis,
+        DistanceComputer& quantize_dis,
         int k,
         idx_t* I,
         float* D,
@@ -713,11 +714,21 @@ int search_from_candidates_direction_beam(
             size_t begin, end;
             hnsw.neighbor_range(v0, level, &begin, &end);
 
-            std::vector<int> batch = direction_guess(
+            // std::vector<int> batch = direction_guess(
+            //     q,
+            //     storage,
+            //     hnsw,
+            //     qdis,
+            //     v0,
+            //     begin,
+            //     end
+            // );
+
+            std::vector<int> batch = distance_guess(
                 q,
                 storage,
                 hnsw,
-                qdis,
+                quantize_dis,
                 v0,
                 begin,
                 end
@@ -725,9 +736,9 @@ int search_from_candidates_direction_beam(
 
             int cnt = 0;
             for(size_t j = 0 ; j < batch.size(); j++){
-                // if(cnt >= 16){
-                //     break;
-                // }
+                if(cnt >= 16){
+                    break;
+                }
                 int v1 = batch[j];
                 if (vt.get(v1)) {
                     continue;
@@ -1216,9 +1227,9 @@ HNSWStats HNSW::search(
 
             candidates.push(nearest, d_nearest);
 
-            // search_from_candidates_direction_beam(
-            //         q, storage, *this, qdis, k, I, D, candidates, vt, stats, 0, 0, params);
-            search_from_candidates(*this, quantize_qdis, k, I, D, candidates, vt, stats, 0, 0, params);
+            search_from_candidates_direction_beam(
+                    q, storage, *this, qdis, quantize_qdis, k, I, D, candidates, vt, stats, 0, 0, params);
+            // search_from_candidates(*this, qdis, k, I, D, candidates, vt, stats, 0, 0, params);
 
         } else {
             std::priority_queue<Node> top_candidates =

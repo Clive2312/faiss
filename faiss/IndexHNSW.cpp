@@ -322,6 +322,7 @@ void IndexHNSW::search(
                 idx_t* idxi = labels + i * k;
                 float* simi = distances + i * k;
                 dis->set_query(x + i * d);
+                qdis->set_query(x + i * d);
                 const float* q = x + i * d;
 
                 maxheap_heapify(k, simi, idxi);

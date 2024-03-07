@@ -549,6 +549,7 @@ Index* parse_other_indexes(
     if (match("PQ([0-9]+)(x[0-9]+)?(np)?")) {
         int M = std::stoi(sm[1].str());
         int nbit = mres_to_int(sm[2], 8, 1);
+        std::cout << "Creating a IndexPQ with " << M << " subvectors with " << nbit << " nbits" << std::endl;
         IndexPQ* index_pq = new IndexPQ(d, M, nbit, metric);
         index_pq->do_polysemous_training = sm[3].str() != "np";
         return index_pq;
