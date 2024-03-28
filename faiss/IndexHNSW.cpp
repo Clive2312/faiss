@@ -314,7 +314,10 @@ void IndexHNSW::search(
             VisitedTable vt(ntotal);
 
             DistanceComputer* dis = storage_distance_computer(storage);
-            DistanceComputer* qdis = storage_distance_computer(pq_storage);
+            DistanceComputer* qdis;
+            if(pq_storage != nullptr){
+                qdis = storage_distance_computer(pq_storage);
+            }
             ScopeDeleter1<DistanceComputer> del(dis);
 
 #pragma omp for reduction(+ : n1, n2, n3, ndis, nreorder) schedule(guided)
@@ -322,11 +325,18 @@ void IndexHNSW::search(
                 idx_t* idxi = labels + i * k;
                 float* simi = distances + i * k;
                 dis->set_query(x + i * d);
-                qdis->set_query(x + i * d);
+                if(pq_storage != nullptr){
+                    qdis->set_query(x + i * d);
+                }
                 const float* q = x + i * d;
 
                 maxheap_heapify(k, simi, idxi);
-                HNSWStats stats = hnsw.search(q, storage, *dis, *qdis, k, idxi, simi, vt, params);
+                HNSWStats stats;
+                if(pq_storage != nullptr){
+                    stats = hnsw.search(q, storage, *dis, *qdis, k, idxi, simi, vt, params);
+                } else{
+                    stats = hnsw.search(*dis, k, idxi, simi, vt, params);
+                }
                 n1 += stats.n1;
                 n2 += stats.n2;
                 n3 += stats.n3;

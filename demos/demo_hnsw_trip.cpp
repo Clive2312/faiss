@@ -126,78 +126,17 @@ double elapsed() {
 int main() {
     double t0 = elapsed();
 
-    // this is typically the fastest one.
-    const char* index_key = "HNSW32";
-
-    // these ones have better memory usage
-    // const char *index_key = "Flat";
-    // const char *index_key = "PQ32";
-    // const char *index_key = "PCA80,Flat";
-    // const char *index_key = "IVF4096,PQ8+16";
-    // const char *index_key = "IVF4096,PQ32";
-    // const char *index_key = "IMI2x8,PQ32";
-    // const char *index_key = "IMI2x8,PQ8+16";
-    // const char *index_key = "OPQ16_64,IMI2x8,PQ8+16";
-
+    const char* index_key = "HNSW64";
+    
     faiss::Index* index;
 
     size_t d;
-
-    faiss::Index* pq_index;
-
-    // {
-    //     const char* pq_index_key = "PQ32";
-    //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
-
-    //     size_t nt;
-    //     float* xt = fvecs_read("../../../downloads/sift/learn.fvecs", &d, &nt);
-
-    //     printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
-    //            elapsed() - t0,
-    //            index_key,
-    //            d);
-    //     pq_index = faiss::index_factory(d, pq_index_key);
-
-    //     // dynamic_cast<faiss::IndexPQ*>(pq_index)->do_polysemous_training = false;
-
-    //     printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
-
-    //     pq_index->train(nt, xt);
-
-    //     dynamic_cast<faiss::IndexPQ*>(pq_index)->pq.compute_sdc_table();
-
-    //     size_t nb, d2;
-    //     float* xb = fvecs_read("../../../downloads/sift/base.fvecs", &d2, &nb);
-
-    //     pq_index->add(nb, xb);
-
-    //     delete[] xt;
-    //     delete[] xb;
-    // }
-
-    // {
-    //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
-
-    //     size_t nt;
-    //     float* xt = fvecs_read("../../..//dataset/TripClick/sift_learn.fvecs", &d, &nt);
-
-    //     printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
-    //            elapsed() - t0,
-    //            index_key,
-    //            d);
-    //     index = faiss::index_factory(d, index_key);
-
-    //     printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
-
-    //     index->train(nt, xt);
-    //     delete[] xt;
-    // }
 
     // {
     //     printf("[%.3f s] Loading database\n", elapsed() - t0);
 
     //     size_t nb, d2;
-    //     float* xb = fvecs_read("../../../downloads/sift/base.fvecs", &d2, &nb);
+    //     float* xb = fvecs_read("../../../see/data/trip/trip/passages.fvecs", &d2, &nb);
     //     d = d2;
     //     assert(d == d2 || !"dataset does not have same dimension as train set");
 
@@ -207,37 +146,19 @@ int main() {
     //            d);
 
     //     index = faiss::index_factory(d, index_key);
+    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 200;
 
     //     index->add(nb, xb);
 
     //     delete[] xb;
     // }
 
-    index = faiss::read_index("../../../downloads/sift/index/hnsw_32.index", 0);
-    pq_index = faiss::read_index("../../../downloads/sift/index/pq_8.index", 0);
-    d = 128;
+    // faiss::write_index(index, "../../../see/data/trip/trip/hnsw_64_200.index");
 
-    ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
-
-    // faiss::write_index(index, "../../../downloads/sift/index/hnsw_32.index");
-    // faiss::write_index(pq_index, "../../../downloads/sift/index/pq_4.index");
     // return 0;
 
-    // {
-    //     // Create a delta compression dataset
-
-    //     int level = 0;
-
-    //     for(int v0 = 0; v0 < 10000; v0++){
-    //         size_t begin, end;
-    //         ((faiss::IndexHNSW*)index)->hnsw.neighbor_range(v0, level, &begin, &end);
-
-    //         size_t nb, d2;
-    //         float* xb = fvecs_read("../../../downloads/sift/base.fvecs", &d2, &nb);
-
-
-    //     }
-    // }
+    index = faiss::read_index("../../../see/data/trip/trip/hnsw_64_200.index", 0);
+    d = 768;
 
     size_t nq;
     float* xq;
@@ -246,8 +167,10 @@ int main() {
         printf("[%.3f s] Loading queries\n", elapsed() - t0);
 
         size_t d2;
-        xq = fvecs_read("../../..//downloads/sift/query.fvecs", &d2, &nq);
+        xq = fvecs_read("../../../see/data/trip/trip/queries.fvecs", &d2, &nq);
         assert(d == d2 || !"query does not have same dimension as train set");
+        printf("[%.3f s] Loaded %ld queries\n", elapsed() - t0, nq);
+
     }
 
     size_t k;         // nb of results per query in the GT
@@ -262,7 +185,7 @@ int main() {
 
         // load ground-truth and convert int to long
         size_t nq2;
-        int* gt_int = ivecs_read("../../..//downloads/sift/gt_10.ivecs", &k, &nq2);
+        int* gt_int = ivecs_read("../../../see/data/trip/trip/gt_100.ivecs", &k, &nq2);
         assert(nq2 == nq || !"incorrect nb of ground truth entries");
 
         gt = new faiss::idx_t[k * nq];
@@ -272,79 +195,26 @@ int main() {
         delete[] gt_int;
     }
 
-    // {
-    //     // We only need k = 10
-    //     int k0 = 10;
-    //     faiss::idx_t* gt0 = new faiss::idx_t[k0 * nq];
-    //     for(int i = 0; i < nq; i++){
-    //         for(int j = 0; j < k0; j++){
-    //             gt0[i*k0 + j] = gt[i*k + j];
-    //         }
-    //     }
+    {
+        // We only need k = 10
+        int k0 = 10;
+        faiss::idx_t* gt0 = new faiss::idx_t[k0 * nq];
+        for(int i = 0; i < nq; i++){
+            for(int j = 0; j < k0; j++){
+                gt0[i*k0 + j] = gt[i*k + j];
+            }
+        }
 
-    //     k = k0;
-    //     gt = gt0;
-    // }
+        k = k0;
+        gt = gt0;
+    }
 
     // Result of the auto-tuning
     std::string selected_params;
 
-    // if (TUNING) { // run auto-tuning
-
-    //     printf("[%.3f s] Preparing auto-tune criterion 1-recall at 1 "
-    //            "criterion, with k=%ld nq=%ld\n",
-    //            elapsed() - t0,
-    //            k,
-    //            nq);
-
-    //     faiss::OneRecallAtRCriterion crit(nq, 1);
-    //     crit.set_groundtruth(k, nullptr, gt);
-    //     crit.nnn = k; // by default, the criterion will request only 1 NN
-
-    //     printf("[%.3f s] Preparing auto-tune parameters\n", elapsed() - t0);
-
-    //     faiss::ParameterSpace params;
-    //     params.initialize(index);
-
-    //     printf("[%.3f s] Auto-tuning over %ld parameters (%ld combinations)\n",
-    //            elapsed() - t0,
-    //            params.parameter_ranges.size(),
-    //            params.n_combinations());
-
-    //     faiss::OperatingPoints ops;
-    //     params.explore(index, nq, xq, crit, &ops);
-
-    //     printf("[%.3f s] Found the following operating points: \n",
-    //            elapsed() - t0);
-
-    //     ops.display();
-
-    //     // keep the first parameter that obtains > 0.5 1-recall@1
-    //     for (int i = 0; i < ops.optimal_pts.size(); i++) {
-    //         if (ops.optimal_pts[i].perf > 0.5) {
-    //             selected_params = ops.optimal_pts[i].key;
-    //             break;
-    //         }
-    //     }
-    //     assert(selected_params.size() >= 0 ||
-    //            !"could not find good enough op point");
-    // }
-
-    // ((faiss::IndexHNSW* )index)->hnsw.test();
-
     { // Use the found configuration to perform a search
 
-        // faiss::ParameterSpace params;
-
-        // printf("[%.3f s] Setting parameter configuration \"%s\" on index\n",
-        //        elapsed() - t0,
-        //        selected_params.c_str());
-
-        // params.set_index_parameters(index, selected_params.c_str());
-
-        // output buffers
-
-        for(int efs = 32; efs <= 32; efs*=2){
+        for(int efs = 32; efs <= 256; efs+=32){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -375,29 +245,7 @@ int main() {
             delete[] D;
         }
 
-        
-
-        // evaluate result by hand.
-        // int n_1 = 0, n_10 = 0, n_100 = 0;
-        // for (int i = 0; i < nq; i++) {
-        //     int gt_nn = gt[i * k];
-        //     for (int j = 0; j < k; j++) {
-        //         if (I[i * k + j] == gt_nn) {
-        //             if (j < 1)
-        //                 n_1++;
-        //             if (j < 10)
-        //                 n_10++;
-        //             if (j < 100)
-        //                 n_100++;
-        //         }
-        //     }
-        // }
-        // printf("R@1 = %.4f\n", n_1 / float(nq));
-        // printf("R@10 = %.4f\n", n_10 / float(nq));
-        // printf("R@100 = %.4f\n", n_100 / float(nq));
     }
-
-    // write_index(index, "./msmarco_hnsw.index");
 
     delete[] xq;
     delete[] gt;
