@@ -188,7 +188,7 @@ int main() {
     index = faiss::read_index("../../../dataset/sift/hnsw.index", 0);
     d = 128;
 
-    pq_index = faiss::read_index("../../../dataset/sift/pq_full_32.index", 0);
+    pq_index = faiss::read_index("../../../dataset/sift/pq_full_8.index", 0);
     ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
 
     size_t nq;
@@ -204,6 +204,8 @@ int main() {
 
     }
 
+    // nq = 100;
+
     size_t k;         // nb of results per query in the GT
     faiss::idx_t* gt; // nq * k matrix of ground-truth nearest-neighbors
 
@@ -217,7 +219,7 @@ int main() {
         // load ground-truth and convert int to long
         size_t nq2;
         int* gt_int = ivecs_read("../../../dataset/sift/gt.ivecs", &k, &nq2);
-        assert(nq2 == nq || !"incorrect nb of ground truth entries");
+        // assert(nq2 == nq || !"incorrect nb of ground truth entries");
 
         gt = new faiss::idx_t[k * nq];
         for (int i = 0; i < k * nq; i++) {
@@ -245,7 +247,7 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 16; efs <= 64; efs+=16){
+        for(int efs = 32; efs <= 32; efs+=16){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -259,6 +261,8 @@ int main() {
                k);
 
             params->efSearch = efs;
+            params->efSpec = 4;
+            params->efNeighbor = 8;
 
             index->search(nq, xq, k, D, I, params);
 

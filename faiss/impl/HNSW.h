@@ -44,8 +44,11 @@ struct DistanceComputer; // from AuxIndexStructures
 struct HNSWStats;
 
 struct SearchParametersHNSW : SearchParameters {
-    int efSearch = 16;
+    int efSearch = 32;
     bool check_relative_distance = true;
+
+    int efSpec = 1;
+    int efNeighbor = -1;
 
     ~SearchParametersHNSW() {}
 };

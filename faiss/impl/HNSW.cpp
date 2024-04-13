@@ -20,6 +20,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <set>
 
 #ifdef __AVX2__
 #include <immintrin.h>
@@ -509,6 +510,28 @@ std::vector<int> direction_guess(
     return nbs;
 }
 
+void distance_rank(
+    DistanceComputer& qdis,
+    std::vector<int>& nb_list) {
+
+    std::vector<float> scores;
+
+    for (int v1 : nb_list) {
+        scores.push_back(qdis(v1));
+    }
+
+    std::vector<std::pair<float, int>> AB;
+    for (size_t i = 0; i < nb_list.size(); ++i) {
+        AB.push_back(std::make_pair(scores[i], nb_list[i]));
+    }
+
+    std::sort(AB.begin(), AB.end());
+
+    for (size_t i = 0; i < AB.size(); ++i) {
+        nb_list[i] = AB[i].second;
+    }
+}
+
 std::vector<int> distance_guess(
     const float* q,
     faiss::Index* storage,
@@ -725,91 +748,88 @@ int search_from_candidates_direction_beam(
     int nres = nres_in;
     int ndis = 0;
 
-    // can be overridden by search params
-    bool do_dis_check = params ? params->check_relative_distance
-                               : hnsw.check_relative_distance;
+
     int efSearch = params ? params->efSearch : hnsw.efSearch;
-    const IDSelector* sel = params ? params->sel : nullptr;
+
+    int beam = params->efSpec;
+    bool nb_prune = false;
+    int nb_size = 0;
+    if(params->efNeighbor > 0){
+        nb_prune = true;
+        nb_size = beam * params->efNeighbor;
+    }
 
     for (int i = 0; i < candidates.size(); i++) {
         idx_t v1 = candidates.ids[i];
         float d = candidates.dis[i];
         FAISS_ASSERT(v1 >= 0);
-        if (!sel || sel->is_member(v1)) {
+        // if (!sel || sel->is_member(v1)) {
+        //     if (nres < k) {
+        //         faiss::maxheap_push(++nres, D, I, d, v1);
+        //     } else if (d < D[0]) {
+        //         faiss::maxheap_replace_top(nres, D, I, d, v1);
+        //     }
+        // }
+        faiss::maxheap_push(++nres, D, I, d, v1);
+        vt.set(v1);
+    }
+
+    // std::cout << "level: " << level << std::endl;
+
+    for(int nstep = 0; nstep < (efSearch / beam) + 1; nstep++){
+        
+        std::vector<int> v_beam;
+        int cnt = 0;
+        while(candidates.size() > 0){
+            float d0 = 0;
+            int v0 = candidates.pop_min(&d0);
+            v_beam.push_back(v0);
+
+            cnt ++;
+            if(cnt == beam){
+                break;
+            }
+        }
+
+        std::set<int> nb_set;
+
+        for(auto v0 : v_beam){
+            size_t begin, end;
+            hnsw.neighbor_range(v0, level, &begin, &end);
+            for (size_t j = begin; j < end; j++) {
+                int v1 = hnsw.neighbors[j];
+                if (v1 < 0)
+                    break;
+                if (vt.get(v1)) {
+                    continue;
+                }
+                nb_set.insert(v1);
+            }
+        }
+
+        std::vector<int> nb_list(nb_set.begin(), nb_set.end());
+
+         if(nb_prune){
+            distance_rank(quantize_dis, nb_list);
+
+            if(nb_list.size() > nb_size){
+                nb_list.resize(nb_size);
+            }
+        }
+
+        
+        for(int v1 : nb_list){
+            vt.set(v1);
+            float d = qdis(v1);
             if (nres < k) {
                 faiss::maxheap_push(++nres, D, I, d, v1);
             } else if (d < D[0]) {
                 faiss::maxheap_replace_top(nres, D, I, d, v1);
             }
+
+            candidates.push(v1, d);
         }
-        vt.set(v1);
-    }
-
-    int beam_size = 32;
-
-    // std::cout << "level: " << level << std::endl;
-
-    for(int nstep = 0; nstep < (efSearch / beam_size) + 1; nstep++){
         
-        std::vector<int> vlist;
-        for(int i = 0; i < beam_size; i++){
-            float d0 = 0;
-            int v0 = candidates.pop_min(&d0);
-
-            if(v0 != -1){
-                vlist.push_back(v0);
-            } else{
-                break;
-            }
-        }
-
-        for(auto v0 : vlist){
-            size_t begin, end;
-            hnsw.neighbor_range(v0, level, &begin, &end);
-
-            // std::vector<int> batch = direction_guess(
-            //     q,
-            //     storage,
-            //     hnsw,
-            //     qdis,
-            //     v0,
-            //     begin,
-            //     end
-            // );
-
-            std::vector<int> batch = distance_guess(
-                q,
-                storage,
-                hnsw,
-                quantize_dis,
-                v0,
-                begin,
-                end
-            );
-
-            int cnt = 0;
-            for(size_t j = 0 ; j < batch.size(); j++){
-                if(cnt >= BEAM_SIZE){
-                    break;
-                }
-                int v1 = batch[j];
-                if (vt.get(v1)) {
-                    continue;
-                }
-                cnt++;
-                vt.set(v1);
-                ndis++;
-                float d = qdis(v1);
-                if (!sel || sel->is_member(v1)) {
-                    if (nres < k) {
-                        faiss::maxheap_push(++nres, D, I, d, v1);
-                    } else if (d < D[0]) {
-                        faiss::maxheap_replace_top(nres, D, I, d, v1);
-                    }
-                }
-                candidates.push(v1, d);
-            }
-        }
     }
 
     if (level == 0) {
@@ -1348,12 +1368,13 @@ HNSWStats HNSW::search(
         float d_nearest = qdis(nearest);
 
         for (int level = max_level; level >= 1; level--) {
-            if(level == 1){
-                greedy_update_nearest_direction(q, storage, *this, qdis, quantize_qdis, level, nearest, d_nearest);
+            // if(level == 1){
+            //     greedy_update_nearest_direction(q, storage, *this, qdis, quantize_qdis, level, nearest, d_nearest);
                 
-            } else{
-                greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
-            }
+            // } else{
+            //     greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+            // }
+            greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
         }
 
         int ef = std::max(params ? params->efSearch : efSearch, k);
