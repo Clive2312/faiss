@@ -28,6 +28,7 @@
 #include <type_traits>
 #endif
 
+#define BEAM_SIZE 16
 namespace faiss {
 
 /**************************************************************
@@ -422,118 +423,6 @@ void greedy_update_nearest(
     }
 }
 
-} // namespace
-
-/// Finds neighbors and builds links with them, starting from an entry
-/// point. The own neighbor list is assumed to be locked.
-void HNSW::add_links_starting_from(
-        DistanceComputer& ptdis,
-        storage_idx_t pt_id,
-        storage_idx_t nearest,
-        float d_nearest,
-        int level,
-        omp_lock_t* locks,
-        VisitedTable& vt) {
-    std::priority_queue<NodeDistCloser> link_targets;
-
-    search_neighbors_to_add(
-            *this, ptdis, link_targets, nearest, d_nearest, level, vt);
-
-    // but we can afford only this many neighbors
-    int M = nb_neighbors(level);
-
-    ::faiss::shrink_neighbor_list(ptdis, link_targets, M);
-
-    std::vector<storage_idx_t> neighbors;
-    neighbors.reserve(link_targets.size());
-    while (!link_targets.empty()) {
-        storage_idx_t other_id = link_targets.top().id;
-        add_link(*this, ptdis, pt_id, other_id, level);
-        neighbors.push_back(other_id);
-        link_targets.pop();
-    }
-
-    omp_unset_lock(&locks[pt_id]);
-    for (storage_idx_t other_id : neighbors) {
-        omp_set_lock(&locks[other_id]);
-        add_link(*this, ptdis, other_id, pt_id, level);
-        omp_unset_lock(&locks[other_id]);
-    }
-    omp_set_lock(&locks[pt_id]);
-}
-
-/**************************************************************
- * Building, parallel
- **************************************************************/
-
-void HNSW::add_with_locks(
-        DistanceComputer& ptdis,
-        int pt_level,
-        int pt_id,
-        std::vector<omp_lock_t>& locks,
-        VisitedTable& vt) {
-    //  greedy search on upper levels
-
-    storage_idx_t nearest;
-#pragma omp critical
-    {
-        nearest = entry_point;
-
-        if (nearest == -1) {
-            max_level = pt_level;
-            entry_point = pt_id;
-        }
-    }
-
-    if (nearest < 0) {
-        return;
-    }
-
-    omp_set_lock(&locks[pt_id]);
-
-    int level = max_level; // level at which we start adding neighbors
-    float d_nearest = ptdis(nearest);
-
-    for (; level > pt_level; level--) {
-        greedy_update_nearest(*this, ptdis, level, nearest, d_nearest);
-    }
-
-    for (; level >= 0; level--) {
-        add_links_starting_from(
-                ptdis, pt_id, nearest, d_nearest, level, locks.data(), vt);
-    }
-
-    omp_unset_lock(&locks[pt_id]);
-
-    if (pt_level > max_level) {
-        max_level = pt_level;
-        entry_point = pt_id;
-    }
-}
-
-/**************************************************************
- * Searching
- **************************************************************/
-
-namespace {
-
-using MinimaxHeap = HNSW::MinimaxHeap;
-using Node = HNSW::Node;
-/** Do a BFS on the candidates list */
-
-struct MyComparator
-{
-    const std::vector<int> & value_vector;
-
-    MyComparator(const std::vector<int> & val_vec):
-        value_vector(val_vec) {}
-
-    bool operator()(int i1, int i2)
-    {
-        return value_vector[i1] > value_vector[i2];
-    }
-};
-
 std::vector<int> direction_guess(
     const float* q,
     faiss::Index* storage,
@@ -656,6 +545,168 @@ std::vector<int> distance_guess(
     return nbs;
 }
 
+void greedy_update_nearest_direction(
+        const float* q,
+        faiss::Index* storage,
+        const HNSW& hnsw,
+        DistanceComputer& qdis,
+        DistanceComputer& quantize_dis,
+        int level,
+        storage_idx_t& nearest,
+        float& d_nearest) {
+    int cnt = 0;
+    for (;;) {
+        storage_idx_t prev_nearest = nearest;
+
+        size_t begin, end;
+        hnsw.neighbor_range(nearest, level, &begin, &end);
+
+        std::vector<int> batch = distance_guess(
+            q,
+            storage,
+            hnsw,
+            quantize_dis,
+            nearest,
+            begin,
+            end
+        );
+
+        for(size_t j = 0 ; j < batch.size(); j++){
+            if(j >= BEAM_SIZE / 2){
+                break;
+            }
+            int v = batch[j];
+            float dis = qdis(v);
+            if (dis < d_nearest) {
+                nearest = v;
+                d_nearest = dis;
+            }
+        }
+        cnt++;
+        // if(cnt >= 1){
+        //     return;
+        // }
+        if (nearest == prev_nearest) {
+            // std::cout << "cnt: " << cnt << std::endl;
+            return;
+        }
+    }
+}
+
+} // namespace
+
+/// Finds neighbors and builds links with them, starting from an entry
+/// point. The own neighbor list is assumed to be locked.
+void HNSW::add_links_starting_from(
+        DistanceComputer& ptdis,
+        storage_idx_t pt_id,
+        storage_idx_t nearest,
+        float d_nearest,
+        int level,
+        omp_lock_t* locks,
+        VisitedTable& vt) {
+    std::priority_queue<NodeDistCloser> link_targets;
+
+    search_neighbors_to_add(
+            *this, ptdis, link_targets, nearest, d_nearest, level, vt);
+
+    // but we can afford only this many neighbors
+    int M = nb_neighbors(level);
+
+    ::faiss::shrink_neighbor_list(ptdis, link_targets, M);
+
+    std::vector<storage_idx_t> neighbors;
+    neighbors.reserve(link_targets.size());
+    while (!link_targets.empty()) {
+        storage_idx_t other_id = link_targets.top().id;
+        add_link(*this, ptdis, pt_id, other_id, level);
+        neighbors.push_back(other_id);
+        link_targets.pop();
+    }
+
+    omp_unset_lock(&locks[pt_id]);
+    for (storage_idx_t other_id : neighbors) {
+        omp_set_lock(&locks[other_id]);
+        add_link(*this, ptdis, other_id, pt_id, level);
+        omp_unset_lock(&locks[other_id]);
+    }
+    omp_set_lock(&locks[pt_id]);
+}
+
+/**************************************************************
+ * Building, parallel
+ **************************************************************/
+
+void HNSW::add_with_locks(
+        DistanceComputer& ptdis,
+        int pt_level,
+        int pt_id,
+        std::vector<omp_lock_t>& locks,
+        VisitedTable& vt) {
+    //  greedy search on upper levels
+
+    storage_idx_t nearest;
+#pragma omp critical
+    {
+        nearest = entry_point;
+
+        if (nearest == -1) {
+            max_level = pt_level;
+            entry_point = pt_id;
+        }
+    }
+
+    if (nearest < 0) {
+        return;
+    }
+
+    omp_set_lock(&locks[pt_id]);
+
+    int level = max_level; // level at which we start adding neighbors
+    float d_nearest = ptdis(nearest);
+
+    for (; level > pt_level; level--) {
+        greedy_update_nearest(*this, ptdis, level, nearest, d_nearest);
+    }
+
+    for (; level >= 0; level--) {
+        add_links_starting_from(
+                ptdis, pt_id, nearest, d_nearest, level, locks.data(), vt);
+    }
+
+    omp_unset_lock(&locks[pt_id]);
+
+    if (pt_level > max_level) {
+        max_level = pt_level;
+        entry_point = pt_id;
+    }
+}
+
+/**************************************************************
+ * Searching
+ **************************************************************/
+
+namespace {
+
+using MinimaxHeap = HNSW::MinimaxHeap;
+using Node = HNSW::Node;
+/** Do a BFS on the candidates list */
+
+struct MyComparator
+{
+    const std::vector<int> & value_vector;
+
+    MyComparator(const std::vector<int> & val_vec):
+        value_vector(val_vec) {}
+
+    bool operator()(int i1, int i2)
+    {
+        return value_vector[i1] > value_vector[i2];
+    }
+};
+
+
+
 int search_from_candidates_direction_beam(
         const float* q,
         faiss::Index* storage,
@@ -694,7 +745,7 @@ int search_from_candidates_direction_beam(
         vt.set(v1);
     }
 
-    int beam_size = 4;
+    int beam_size = 32;
 
     // std::cout << "level: " << level << std::endl;
 
@@ -738,7 +789,7 @@ int search_from_candidates_direction_beam(
 
             int cnt = 0;
             for(size_t j = 0 ; j < batch.size(); j++){
-                if(cnt >= 8){
+                if(cnt >= BEAM_SIZE){
                     break;
                 }
                 int v1 = batch[j];
@@ -912,6 +963,8 @@ int search_from_candidates(
     // can be overridden by search params
     bool do_dis_check = params ? params->check_relative_distance
                                : hnsw.check_relative_distance;
+    
+    do_dis_check = false;
     int efSearch = params ? params->efSearch : hnsw.efSearch;
     const IDSelector* sel = params ? params->sel : nullptr;
 
@@ -1295,7 +1348,12 @@ HNSWStats HNSW::search(
         float d_nearest = qdis(nearest);
 
         for (int level = max_level; level >= 1; level--) {
-            greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+            if(level == 1){
+                greedy_update_nearest_direction(q, storage, *this, qdis, quantize_qdis, level, nearest, d_nearest);
+                
+            } else{
+                greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+            }
         }
 
         int ef = std::max(params ? params->efSearch : efSearch, k);
@@ -1305,9 +1363,9 @@ HNSWStats HNSW::search(
 
             candidates.push(nearest, d_nearest);
 
-            // search_from_candidates_direction_beam(
-            //         q, storage, *this, qdis, quantize_qdis, k, I, D, candidates, vt, stats, 0, 0, params);
-            search_from_candidates(*this, qdis, k, I, D, candidates, vt, stats, 0, 0, params);
+            search_from_candidates_direction_beam(
+                    q, storage, *this, qdis, quantize_qdis, k, I, D, candidates, vt, stats, 0, 0, params);
+            // search_from_candidates(*this, qdis, k, I, D, candidates, vt, stats, 0, 0, params);
 
         } else {
             std::priority_queue<Node> top_candidates =

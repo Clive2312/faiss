@@ -25,8 +25,23 @@ target_link_libraries(demo_generate_gt PRIVATE faiss)
 add_executable(hnsw_trip EXCLUDE_FROM_ALL demo_hnsw_trip.cpp)
 target_link_libraries(hnsw_trip PRIVATE faiss)
 
-# add_executable(demo_weighted_kmeans EXCLUDE_FROM_ALL demo_weighted_kmeans.cpp)
-# target_link_libraries(demo_weighted_kmeans PRIVATE faiss)
+add_executable(hnsw_msmarco EXCLUDE_FROM_ALL demo_hnsw_msmarco.cpp)
+target_link_libraries(hnsw_msmarco PRIVATE faiss)
+
+add_executable(hnsw_sift  EXCLUDE_FROM_ALL demo_hnsw_sift.cpp)
+target_link_libraries(hnsw_sift PRIVATE faiss)
+
+add_executable(kmeans_sift  EXCLUDE_FROM_ALL demo_kmeans_sift.cpp)
+target_link_libraries(kmeans_sift PRIVATE faiss)
+
+add_executable(kmeans_trip  EXCLUDE_FROM_ALL demo_kmeans_trip.cpp)
+target_link_libraries(kmeans_trip PRIVATE faiss)
+
+add_executable(kmeans_msmarco  EXCLUDE_FROM_ALL demo_kmeans_msmarco.cpp)
+target_link_libraries(kmeans_msmarco PRIVATE faiss)
+
+add_executable(demo_weighted_kmeans EXCLUDE_FROM_ALL demo_weighted_kmeans.cpp)
+target_link_libraries(demo_weighted_kmeans PRIVATE faiss)
 
 # add_executable(demo_residual_quantizer EXCLUDE_FROM_ALL demo_residual_quantizer.cpp)
 # target_link_libraries(demo_residual_quantizer PRIVATE faiss)

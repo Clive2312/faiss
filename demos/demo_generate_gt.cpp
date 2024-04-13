@@ -91,16 +91,6 @@ int main() {
     // this is typically the fastest one.
     const char* index_key = "Flat";
 
-    // these ones have better memory usage
-    // const char *index_key = "Flat";
-    // const char *index_key = "PQ32";
-    // const char *index_key = "PCA80,Flat";
-    // const char *index_key = "IVF4096,PQ8+16";
-    // const char *index_key = "IVF4096,PQ32";
-    // const char *index_key = "IMI2x8,PQ32";
-    // const char *index_key = "IMI2x8,PQ8+16";
-    // const char *index_key = "OPQ16_64,IMI2x8,PQ8+16";
-
     faiss::Index* index;
 
     size_t d;
@@ -109,7 +99,7 @@ int main() {
         printf("[%.3f s] Loading database\n", elapsed() - t0);
 
         size_t nb, d2;
-        float* xb = fvecs_read("../../../see/data/trip/trip/passages.fvecs", &d2, &nb);
+        float* xb = fvecs_read("../../../dataset/trip_distilbert/passages.fvecs", &d2, &nb);
         d = d2;
         assert(d == d2 || !"dataset does not have same dimension as train set");
 
@@ -119,6 +109,7 @@ int main() {
                d);
 
         index = faiss::index_factory(d, index_key);
+        index->metric_type = faiss::METRIC_INNER_PRODUCT;
 
         index->add(nb, xb);
 
@@ -132,11 +123,11 @@ int main() {
         printf("[%.3f s] Loading queries\n", elapsed() - t0);
 
         size_t d2;
-        xq = fvecs_read("../../../see/data/trip/trip/queries.fvecs", &d2, &nq);
+        xq = fvecs_read("../../../dataset/trip_distilbert/queries.fvecs", &d2, &nq);
         assert(d == d2 || !"query does not have same dimension as train set");
     }
 
-    size_t k = 100;       // nb of results per query in the GT
+    size_t k = 10;       // nb of results per query in the GT
 
     // Result of the auto-tuning
     std::string selected_params;
@@ -161,14 +152,14 @@ int main() {
         }
 
         printf("[%.3f s] Save generate Ground Truth\n", elapsed() - t0);
-        fvecs_write("../../../see/data/trip/trip/gt_100.ivecs", (float*)gt, k, nq);
+        fvecs_write("../../../dataset/trip_distilbert/gt_l2_10.ivecs", (float*)gt, k, nq);
 
         delete[] gt;
         delete[] I;
         delete[] D;
     }
 
-    // write_index(index, "./msmarco_hnsw.index");
+    // write_index(index, "./trip_norm_hnsw.index");
 
     delete[] xq;
     delete index;
