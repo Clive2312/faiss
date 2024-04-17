@@ -117,6 +117,24 @@ int* ivecs_read(const char* fname, size_t* d_out, size_t* n_out) {
     return (int*)fvecs_read(fname, d_out, n_out);
 }
 
+void fvecs_write(const char* fname, float* data, size_t d, size_t n) {
+    FILE* f = fopen(fname, "w");
+    if (!f) {
+        fprintf(stderr, "could not open %s\n", fname);
+        perror("");
+        abort();
+    }
+    for (size_t i = 0; i < n; i++){
+        fwrite(&d, 1, sizeof(int), f);
+        fwrite(data + i*d, d, sizeof(float), f);
+    }
+    fclose(f);
+}
+
+void ivecs_write(const char* fname, int* data, size_t d, size_t n) {
+    fvecs_write(fname, (float*)data, d, n);
+}
+
 double elapsed() {
     struct timeval tv;
     gettimeofday(&tv, nullptr);
@@ -133,7 +151,7 @@ int main() {
 
     //  {
 
-    //     const char* pq_index_key = "PQ8";
+    //     const char* pq_index_key = "PQ4";
     //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
 
     //     size_t nt;
@@ -155,7 +173,7 @@ int main() {
 
     //     pq_index->add(nt, xt);
 
-    //     faiss::write_index(pq_index, "../../../dataset/trip_distilbert/pq_full_8_ip.index");
+    //     faiss::write_index(pq_index, "../../../dataset/trip_distilbert/pq_full_4_ip.index");
 
     //     delete[] xt;
     //     return 0;
@@ -191,7 +209,7 @@ int main() {
     index = faiss::read_index("../../../dataset/trip_distilbert/hnsw_32_40_ip.index", 0);
     d = 768;
 
-    pq_index = faiss::read_index("../../../dataset/trip_distilbert/pq_full_16_ip.index", 0);
+    pq_index = faiss::read_index("../../../dataset/trip_distilbert/pq_full_4_ip.index", 0);
     ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
 
     size_t nq;
@@ -248,20 +266,22 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 96; efs <= 192; efs+=32){
+        for(int efn = 1; efn <= 2; efn+=1){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
 
             faiss::SearchParametersHNSW* params = new faiss::SearchParametersHNSW();
 
-            printf("[%.3f s] Perform a search on %ld queries with efs %d k %ld\n",
+            printf("[%.3f s] Perform a search on %ld queries with efn %d k %ld\n",
                elapsed() - t0,
                nq,
-               efs,
+               efn,
                k);
 
-            params->efSearch = efs;
+            params->efSearch = 192;
+            params->efSpec = 1;
+            params->efNeighbor = efn;
 
             index->search(nq, xq, k, D, I, params);
 
@@ -274,6 +294,14 @@ int main() {
                 nq,
                 k
             );
+
+            int* result = new int[nq * k];
+            for(int i = 0; i < nq*k; i++){
+                result[i] = I[i];
+            }
+            // ivecs_write("../../../dataset/trip_distilbert/see_10.ivecs", result, k, nq);
+
+
 
             delete[] I;
             delete[] D;

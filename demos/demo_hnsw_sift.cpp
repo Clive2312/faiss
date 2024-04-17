@@ -117,6 +117,24 @@ int* ivecs_read(const char* fname, size_t* d_out, size_t* n_out) {
     return (int*)fvecs_read(fname, d_out, n_out);
 }
 
+void fvecs_write(const char* fname, float* data, size_t d, size_t n) {
+    FILE* f = fopen(fname, "w");
+    if (!f) {
+        fprintf(stderr, "could not open %s\n", fname);
+        perror("");
+        abort();
+    }
+    for (size_t i = 0; i < n; i++){
+        fwrite(&d, 1, sizeof(int), f);
+        fwrite(data + i*d, d, sizeof(float), f);
+    }
+    fclose(f);
+}
+
+void ivecs_write(const char* fname, int* data, size_t d, size_t n) {
+    fvecs_write(fname, (float*)data, d, n);
+}
+
 double elapsed() {
     struct timeval tv;
     gettimeofday(&tv, nullptr);
@@ -133,7 +151,7 @@ int main() {
 
     //  {
 
-    //     const char* pq_index_key = "PQ32";
+    //     const char* pq_index_key = "PQ4";
     //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
 
     //     size_t nt;
@@ -155,7 +173,7 @@ int main() {
 
     //     pq_index->add(nt, xt);
 
-    //     faiss::write_index(pq_index, "../../../dataset/sift/pq_full_32.index");
+    //     faiss::write_index(pq_index, "../../../dataset/sift/pq_full_4.index");
 
     //     delete[] xt;
     //     return 0;
@@ -247,7 +265,7 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 32; efs <= 32; efs+=16){
+        for(int efs = 32; efs <= 32; efs+=1){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -275,6 +293,12 @@ int main() {
                 nq,
                 k
             );
+
+            int* result = new int[nq * k];
+            for(int i = 0; i < nq*k; i++){
+                result[i] = I[i];
+            }
+            ivecs_write("../../../accuracy/sift/see_10.ivecs", result, k, nq);
 
             delete[] I;
             delete[] D;

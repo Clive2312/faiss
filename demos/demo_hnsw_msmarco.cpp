@@ -117,6 +117,24 @@ int* ivecs_read(const char* fname, size_t* d_out, size_t* n_out) {
     return (int*)fvecs_read(fname, d_out, n_out);
 }
 
+void fvecs_write(const char* fname, float* data, size_t d, size_t n) {
+    FILE* f = fopen(fname, "w");
+    if (!f) {
+        fprintf(stderr, "could not open %s\n", fname);
+        perror("");
+        abort();
+    }
+    for (size_t i = 0; i < n; i++){
+        fwrite(&d, 1, sizeof(int), f);
+        fwrite(data + i*d, d, sizeof(float), f);
+    }
+    fclose(f);
+}
+
+void ivecs_write(const char* fname, int* data, size_t d, size_t n) {
+    fvecs_write(fname, (float*)data, d, n);
+}
+
 double elapsed() {
     struct timeval tv;
     gettimeofday(&tv, nullptr);
@@ -131,35 +149,35 @@ int main() {
 
     size_t d;
 
-    //  {
+     {
 
-    //     const char* pq_index_key = "PQ8";
-    //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
+        const char* pq_index_key = "PQ4";
+        printf("[%.3f s] Loading train set\n", elapsed() - t0);
 
-    //     size_t nt;
-    //     float* xt = fvecs_read("../../../dataset/msmarco_bert/passages.fvecs", &d, &nt);
+        size_t nt;
+        float* xt = fvecs_read("../../../dataset/msmarco_bert/passages.fvecs", &d, &nt);
 
-    //     printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
-    //            elapsed() - t0,
-    //            pq_index_key,
-    //            d);
-    //     pq_index = faiss::index_factory(d, pq_index_key, faiss::METRIC_INNER_PRODUCT);
+        printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
+               elapsed() - t0,
+               pq_index_key,
+               d);
+        pq_index = faiss::index_factory(d, pq_index_key, faiss::METRIC_INNER_PRODUCT);
 
-    //     // dynamic_cast<faiss::IndexPQ*>(pq_index)->do_polysemous_training = false;
+        // dynamic_cast<faiss::IndexPQ*>(pq_index)->do_polysemous_training = false;
 
-    //     printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
+        printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
 
-    //     pq_index->train(nt, xt);
+        pq_index->train(nt, xt);
 
-    //     // dynamic_cast<faiss::IndexPQ*>(pq_index)->pq.compute_sdc_table();
+        // dynamic_cast<faiss::IndexPQ*>(pq_index)->pq.compute_sdc_table();
 
-    //     pq_index->add(nt, xt);
+        pq_index->add(nt, xt);
 
-    //     faiss::write_index(pq_index, "../../../dataset/msmarco_bert/pq_full_8_ip.index");
+        faiss::write_index(pq_index, "../../../dataset/msmarco_bert/pq_full_4_ip.index");
 
-    //     delete[] xt;
-    //     return 0;
-    // }
+        delete[] xt;
+        return 0;
+    }
 
     // {
     //     const char* index_key = "HNSW32";
@@ -246,20 +264,22 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 160; efs <= 256; efs+=32){
+        for(int efn = 1; efn <= 64; efn*=2){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
 
             faiss::SearchParametersHNSW* params = new faiss::SearchParametersHNSW();
 
-            printf("[%.3f s] Perform a search on %ld queries with efs %d k %ld\n",
+            printf("[%.3f s] Perform a search on %ld queries with efn %d k %ld\n",
                elapsed() - t0,
                nq,
-               efs,
+               efn,
                k);
 
-            params->efSearch = efs;
+            params->efSearch = 224;
+            params->efSpec = efn;
+            params->efNeighbor = 64;
 
             index->search(nq, xq, k, D, I, params);
 
@@ -272,6 +292,13 @@ int main() {
                 nq,
                 k
             );
+
+            int* result = new int[nq * k];
+            for(int i = 0; i < nq*k; i++){
+                result[i] = I[i];
+            }
+            // ivecs_write("../../../dataset/msmarco_bert/see_10.ivecs", result, k, nq);
+
 
             delete[] I;
             delete[] D;
