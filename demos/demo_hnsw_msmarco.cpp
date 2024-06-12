@@ -149,35 +149,35 @@ int main() {
 
     size_t d;
 
-     {
+    //  {
 
-        const char* pq_index_key = "PQ4";
-        printf("[%.3f s] Loading train set\n", elapsed() - t0);
+    //     const char* pq_index_key = "PQ4";
+    //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
 
-        size_t nt;
-        float* xt = fvecs_read("../../../dataset/msmarco_bert/passages.fvecs", &d, &nt);
+    //     size_t nt;
+    //     float* xt = fvecs_read("../../../dataset/msmarco_bert/passages.fvecs", &d, &nt);
 
-        printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
-               elapsed() - t0,
-               pq_index_key,
-               d);
-        pq_index = faiss::index_factory(d, pq_index_key, faiss::METRIC_INNER_PRODUCT);
+    //     printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
+    //            elapsed() - t0,
+    //            pq_index_key,
+    //            d);
+    //     pq_index = faiss::index_factory(d, pq_index_key, faiss::METRIC_INNER_PRODUCT);
 
-        // dynamic_cast<faiss::IndexPQ*>(pq_index)->do_polysemous_training = false;
+    //     // dynamic_cast<faiss::IndexPQ*>(pq_index)->do_polysemous_training = false;
 
-        printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
+    //     printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
 
-        pq_index->train(nt, xt);
+    //     pq_index->train(nt, xt);
 
-        // dynamic_cast<faiss::IndexPQ*>(pq_index)->pq.compute_sdc_table();
+    //     // dynamic_cast<faiss::IndexPQ*>(pq_index)->pq.compute_sdc_table();
 
-        pq_index->add(nt, xt);
+    //     pq_index->add(nt, xt);
 
-        faiss::write_index(pq_index, "../../../dataset/msmarco_bert/pq_full_4_ip.index");
+    //     faiss::write_index(pq_index, "../../../dataset/msmarco_bert/pq_full_4_ip.index");
 
-        delete[] xt;
-        return 0;
-    }
+    //     delete[] xt;
+    //     return 0;
+    // }
 
     // {
     //     const char* index_key = "HNSW32";
@@ -264,7 +264,7 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efn = 1; efn <= 64; efn*=2){
+        for(int efn = 32; efn <= 32; efn*=2){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -279,7 +279,7 @@ int main() {
 
             params->efSearch = 224;
             params->efSpec = efn;
-            params->efNeighbor = 64;
+            params->efNeighbor = 12;
 
             index->search(nq, xq, k, D, I, params);
 
@@ -297,7 +297,7 @@ int main() {
             for(int i = 0; i < nq*k; i++){
                 result[i] = I[i];
             }
-            // ivecs_write("../../../dataset/msmarco_bert/see_10.ivecs", result, k, nq);
+            ivecs_write("../../../dataset/msmarco_bert/efspec_32_10.ivecs", result, k, nq);
 
 
             delete[] I;

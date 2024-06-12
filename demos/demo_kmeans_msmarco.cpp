@@ -217,6 +217,17 @@ int main() {
         }
     }
 
+    int max_l = 0;
+    for(auto pair : assignment){
+        if(pair.second.size() > max_l){
+            max_l = pair.second.size();
+        }
+    }
+
+    std::cout << "Max size: " << max_l << std::endl;
+
+    return 0;
+
     // Constructing Index for each clusters
     std::map<std::pair<int, int>, int> reverse_map;
     std::cout << "Building index for each cluster..." << std::endl;
