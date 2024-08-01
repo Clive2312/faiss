@@ -25,6 +25,9 @@ target_link_libraries(demo_generate_gt PRIVATE faiss)
 add_executable(hnsw_trip EXCLUDE_FROM_ALL demo_hnsw_trip.cpp)
 target_link_libraries(hnsw_trip PRIVATE faiss)
 
+add_executable(hnsw_laion EXCLUDE_FROM_ALL demo_hnsw_laion.cpp)
+target_link_libraries(hnsw_laion PRIVATE faiss)
+
 add_executable(hnsw_msmarco EXCLUDE_FROM_ALL demo_hnsw_msmarco.cpp)
 target_link_libraries(hnsw_msmarco PRIVATE faiss)
 

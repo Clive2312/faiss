@@ -248,19 +248,22 @@ struct HNSWStats {
     size_t n1, n2, n3;
     size_t ndis;
     size_t nreorder;
+    float hit_rate;
 
     HNSWStats(
             size_t n1 = 0,
             size_t n2 = 0,
             size_t n3 = 0,
             size_t ndis = 0,
-            size_t nreorder = 0)
-            : n1(n1), n2(n2), n3(n3), ndis(ndis), nreorder(nreorder) {}
+            size_t nreorder = 0,
+            float hit_rate = 0.0)
+            : n1(n1), n2(n2), n3(n3), ndis(ndis), nreorder(nreorder), hit_rate(hit_rate) {}
 
     void reset() {
         n1 = n2 = n3 = 0;
         ndis = 0;
         nreorder = 0;
+        hit_rate = 0;
     }
 
     void combine(const HNSWStats& other) {
@@ -269,6 +272,7 @@ struct HNSWStats {
         n3 += other.n3;
         ndis += other.ndis;
         nreorder += other.nreorder;
+        hit_rate += other.hit_rate;
     }
 };
 

@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 
 #include <queue>
 #include <unordered_set>
@@ -303,6 +304,7 @@ void IndexHNSW::search(
         efSearch = params->efSearch;
     }
     size_t n1 = 0, n2 = 0, n3 = 0, ndis = 0, nreorder = 0;
+    float hit_rate = 0;
 
     idx_t check_period =
             InterruptCallback::get_period_hint(hnsw.max_level * d * efSearch);
@@ -321,7 +323,7 @@ void IndexHNSW::search(
             }
             ScopeDeleter1<DistanceComputer> del(dis);
 
-#pragma omp for reduction(+ : n1, n2, n3, ndis, nreorder) schedule(guided)
+#pragma omp for reduction(+ : n1, n2, n3, ndis, nreorder, hit_rate) schedule(guided)
             for (idx_t i = i0; i < i1; i++) {
                 idx_t* idxi = labels + i * k;
                 float* simi = distances + i * k;
@@ -343,6 +345,7 @@ void IndexHNSW::search(
                 n3 += stats.n3;
                 ndis += stats.ndis;
                 nreorder += stats.nreorder;
+                hit_rate += stats.hit_rate;
                 maxheap_reorder(k, simi, idxi);
 
                 if (reconstruct_from_neighbors &&
@@ -364,6 +367,8 @@ void IndexHNSW::search(
         InterruptCallback::check();
     }
 
+    std::cout << "hit rate: " << hit_rate / n << std::endl;
+
     if (is_similarity_metric(metric_type)) {
         // we need to revert the negated distances
         for (size_t i = 0; i < k * n; i++) {
@@ -371,7 +376,7 @@ void IndexHNSW::search(
         }
     }
 
-    hnsw_stats.combine({n1, n2, n3, ndis, nreorder});
+    hnsw_stats.combine({n1, n2, n3, ndis, nreorder, hit_rate});
 }
 
 void IndexHNSW::add(idx_t n, const float* x) {

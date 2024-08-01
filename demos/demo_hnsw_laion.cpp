@@ -149,21 +149,33 @@ int main() {
 
     size_t d;
 
-    //  {
+    // size_t nt;
+    // float* xt = fvecs_read("/home/clive/see/data/dataset/laion1m/laion1m_base.fvecs", &d, &nt);
+    // fvecs_write("/home/clive/see/data/dataset/laion1m/1m/laion_base.fvecs", xt, d, nt);
+    // fvecs_write("/home/clive/see/data/dataset/laion1m/100k/laion_base.fvecs", xt, d, 100000);
+    // fvecs_write("/home/clive/see/data/dataset/laion1m/10k/laion_base.fvecs", xt, d, 10000);
+    // fvecs_write("/home/clive/see/data/dataset/laion1m/1k/laion_base.fvecs", xt, d, 1000);
 
-    //     const char* pq_index_key = "PQ4";
+    // return 0;
+
+    // {
+
+    //     const char* pq_index_key = "PQ32x4";
     //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
 
     //     size_t nt;
-    //     float* xt = fvecs_read("../../../dataset/trip_distilbert/passages.fvecs", &d, &nt);
+    //     float* xt = fvecs_read("/home/clive/see/data/dataset/laion1m/100k/laion_base.fvecs", &d, &nt);
 
     //     printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
     //            elapsed() - t0,
     //            pq_index_key,
     //            d);
-    //     pq_index = faiss::index_factory(d, pq_index_key, faiss::METRIC_INNER_PRODUCT);
+    //     pq_index = faiss::index_factory(d, pq_index_key);
+    //     pq_index->metric_type = faiss::METRIC_INNER_PRODUCT;
 
     //     // dynamic_cast<faiss::IndexPQ*>(pq_index)->do_polysemous_training = false;
+
+    //     // nt = 1000;
 
     //     printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
 
@@ -173,7 +185,7 @@ int main() {
 
     //     pq_index->add(nt, xt);
 
-    //     faiss::write_index(pq_index, "../../../dataset/trip_distilbert/pq_full_4_ip.index");
+    //     faiss::write_index(pq_index, "/home/clive/see/data/dataset/laion1m/100k/pq_full_32_4_ip.index");
 
     //     delete[] xt;
     //     return 0;
@@ -185,7 +197,7 @@ int main() {
     //     printf("[%.3f s] Loading database\n", elapsed() - t0);
 
     //     size_t nb, d2;
-    //     float* xb = fvecs_read("../../../dataset/trip_distilbert/passages.fvecs", &d2, &nb);
+    //     float* xb = fvecs_read("/home/clive/see/data/dataset/laion1m/1m/laion_base.fvecs", &d2, &nb);
     //     d = d2;
     //     assert(d == d2 || !"dataset does not have same dimension as train set");
 
@@ -194,22 +206,28 @@ int main() {
     //            nb,
     //            d);
 
-    //     index = faiss::index_factory(d, index_key, faiss::METRIC_INNER_PRODUCT);
-    //     // index->metric_type = faiss::METRIC_INNER_PRODUCT;
+    //     return 0;
+
+    //     // nb = 100000;
+
+    //     index = faiss::index_factory(d, index_key);
     //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 40;
-        
+    //     index->metric_type = faiss::METRIC_INNER_PRODUCT;
 
     //     index->add(nb, xb);
 
-    //     faiss::write_index(index, "../../../dataset/trip_distilbert/hnsw_32_40_ip.index");
+    //     faiss::write_index(index, "/home/clive/see/data/dataset/laion1m/1k/hnsw_32_40_ip.index");
     //     delete[] xb;
+
     //     return 0;
     // }
 
-    index = faiss::read_index("/home/clive/see/data/dataset/trip_distilbert/hnsw_32_40_ip.index", 0);
-    d = 768;
+    index = faiss::read_index("/home/clive/see/data/dataset/laion1m/1k/hnsw_32_40_ip.index", 0);
+    d = 512;
 
-    pq_index = faiss::read_index("/home/clive/see/data/dataset/trip_distilbert/pq_full_32_ip.index", 0);
+    // printf("[%.3f s] Index metric type %d\n", elapsed() - t0, index->metric_type);
+
+    pq_index = faiss::read_index("/home/clive/see/data/dataset/laion1m/1k/pq_full_32_2_ip.index", 0);
     ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
 
     size_t nq;
@@ -219,11 +237,13 @@ int main() {
         printf("[%.3f s] Loading queries\n", elapsed() - t0);
 
         size_t d2;
-        xq = fvecs_read("/home/clive/see/data/dataset/trip_distilbert/queries.fvecs", &d2, &nq);
+        xq = fvecs_read("/home/clive/see/data/dataset/laion1m/laion_query.fvecs", &d2, &nq);
         assert(d == d2 || !"query does not have same dimension as train set");
         printf("[%.3f s] Loaded %ld queries\n", elapsed() - t0, nq);
 
     }
+
+    // nq = 100;
 
     size_t k;         // nb of results per query in the GT
     faiss::idx_t* gt; // nq * k matrix of ground-truth nearest-neighbors
@@ -237,8 +257,8 @@ int main() {
 
         // load ground-truth and convert int to long
         size_t nq2;
-        int* gt_int = ivecs_read("/home/clive/see/data/dataset/trip_distilbert/gt_10.ivecs", &k, &nq2);
-        assert(nq2 == nq || !"incorrect nb of ground truth entries");
+        int* gt_int = ivecs_read("/home/clive/see/data/dataset/laion1m/1k/gt.ivecs", &k, &nq2);
+        // assert(nq2 == nq || !"incorrect nb of ground truth entries");
 
         gt = new faiss::idx_t[k * nq];
         for (int i = 0; i < k * nq; i++) {
@@ -266,7 +286,7 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 192; efs <= 192; efs+=1){
+        for(int efs = 3; efs <= 3; efs+=1){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -280,8 +300,10 @@ int main() {
                k);
 
             params->efSearch = efs;
-            params->efSpec = 32;
-            params->efNeighbor = 12;
+            params->efSpec = 1;
+            params->efNeighbor = 28;
+
+            nq = 1;
 
             index->search(nq, xq, k, D, I, params);
 
@@ -299,9 +321,7 @@ int main() {
             for(int i = 0; i < nq*k; i++){
                 result[i] = I[i];
             }
-            // ivecs_write("../../../dataset/trip_distilbert/see_10.ivecs", result, k, nq);
-
-
+            // ivecs_write("../../../accuracy/sift/see_10.ivecs", result, k, nq);
 
             delete[] I;
             delete[] D;
