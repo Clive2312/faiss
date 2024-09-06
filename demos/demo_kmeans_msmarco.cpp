@@ -27,6 +27,7 @@
 #include <faiss/index_factory.h>
 #include <faiss/utils/distances.h>
 #include <faiss/utils/random.h>
+#include <faiss/index_io.h>
 
 float compute_recall(faiss::idx_t* gt, int gt_size, faiss::idx_t* I, int nq, int k, int gamma=1) {
     // printf("compute_recall params: gt.size(): %ld, gt_size: %d, I.size(): %ld, nq: %d, k: %d, gamma: %d\n", gt.size(), gt_size, I.size(), nq, k, gamma);
@@ -72,22 +73,104 @@ float compute_recall(faiss::idx_t* gt, int gt_size, faiss::idx_t* I, int nq, int
     return (n_10 / float(nq));
 }
 
-float tiptoe_clustering(
-        size_t d,
-        size_t n,
-        size_t k,
-        const float* x,
-        float* centroids) {
-    faiss::Clustering clus(d, k);
-    clus.nredo = 3;
-    // clus.min_points_per_centroid = 725;
-    // clus.max_points_per_centroid = 1250;
-    clus.verbose = d * n * k > (size_t(1) << 30);
+// float tiptoe_clustering(
+//         size_t d,
+//         size_t n,
+//         size_t k,
+//         const float* x,
+//         float* centroids) {
+//     faiss::Clustering clus(d, k);
+//     clus.nredo = 3;
+//     clus.niter = 5;
+//     clus.verbose = true;
+//     // display logs if > 1Gflop per iteration
+//     faiss::IndexFlatL2 index(d);
+//     index.metric_type = faiss::METRIC_INNER_PRODUCT;
+//     clus.train(n, x, index); 
+//     memcpy(centroids, clus.centroids.data(), sizeof(*centroids) * d * k);
+//     return clus.iteration_stats.back().obj;
+// }
+
+std::vector<std::vector<float>> tiptoe_clustering_recursive(
+        size_t dim,
+        size_t nb,
+        size_t n_centroids,
+        const float* xb,
+        size_t max_n_nodes) {
+
+    std::cout << "-- tiptoe_clustering_recursive on: " << nb << " nodes to: " << n_centroids << " centroids" << std::endl;
+
+    std::vector<std::vector<float>> centroids;
+
+    // Compute centroids
+    faiss::Clustering clus(dim, n_centroids);
+    clus.nredo = 1;
+    clus.spherical = true;
+    clus.niter = 16;
+    clus.verbose = true;
     // display logs if > 1Gflop per iteration
-    faiss::IndexFlatL2 index(d);
-    clus.train(n, x, index); 
-    memcpy(centroids, clus.centroids.data(), sizeof(*centroids) * d * k);
-    return clus.iteration_stats.back().obj;
+    faiss::IndexFlatL2 index(dim);
+    clus.train(nb, xb, index); 
+    // memcpy(centroids, clus.centroids.data(), sizeof(*centroids) * dim * n_centroids);
+
+    // Get assignment
+    std::map<size_t, std::vector<size_t>> assignment;
+    faiss::IndexFlatL2 index_centroids(dim);
+    index_centroids.add(n_centroids, clus.centroids.data());
+
+    faiss::idx_t* i_b = new faiss::idx_t[nb];
+    float* d_b = new float[nb];
+
+    index_centroids.search(nb, xb, 1, d_b, i_b);
+
+    for(size_t i = 0; i < nb; i++){
+        assignment[i_b[i]].push_back(i);
+    }
+
+    // check size
+    for(size_t nc = 0; nc < n_centroids; nc++){
+        if(assignment[nc].size() > max_n_nodes){
+            int new_n_centrods = ceil(assignment[nc].size() * 1.0 / max_n_nodes); 
+
+            if(new_n_centrods < n_centroids){
+                float* new_xb = new float[dim*assignment[nc].size()];
+
+                for(size_t i = 0; i < assignment[nc].size(); i++){
+                    size_t ni = assignment[nc][i];
+                    memcpy(new_xb + i * dim, xb + ni * dim, dim*sizeof(float));
+                }
+                std::cout << " ## RECURSIVE." << std::endl;
+
+                std::vector<std::vector<float>> new_centroids = tiptoe_clustering_recursive(
+                    dim, 
+                    assignment[nc].size(),
+                    new_n_centrods,
+                    new_xb,
+                    max_n_nodes
+                );
+
+                for(auto c : new_centroids){
+                    centroids.push_back(c);
+                }
+
+                std::cout << " ## RECURSIVE DONE." << std::endl;
+            } else{
+                std::vector<float> c(
+                    clus.centroids.data() + nc*dim,
+                    clus.centroids.data() + (nc + 1)*dim
+                );
+                centroids.push_back(c);
+            }
+        } else{
+            std::vector<float> c(
+                clus.centroids.data() + nc*dim,
+                clus.centroids.data() + (nc + 1)*dim
+            );
+            centroids.push_back(c);
+        }
+    }
+    
+    return centroids;
 }
 
 float* fvecs_read(const char* fname, size_t* d_out, size_t* n_out) {
@@ -147,29 +230,59 @@ int main() {
     
     size_t nb;
     size_t d;
-    size_t n_centroids = 2974;
     
-    float* xb = fvecs_read("../../../dataset/msmarco_bert/passages.fvecs", &d, &nb);
-    float* centroids = new float[d*n_centroids];
+    size_t n_centroids = 3500;
+    size_t max_nodes_per_centroids = 4000;
+
+    
+    float* xb = fvecs_read("/home/clive/see/data/dataset/msmarco_bert/passages.fvecs", &d, &nb);
+
+    // Loading Queries
+    std::cout << "Loading queries..." << std::endl;
+    size_t nq;
+    float* xq;
+    size_t d2;
+    int n_result = 10;
+
+    xq = fvecs_read("/home/clive/see/data/dataset/msmarco_bert/queries.fvecs", &d2, &nq);
 
     std::cout << "Clustering data: " << std::endl;
     std::cout << "- d: " << d << std::endl;
     std::cout << "- n: " << nb << std::endl;
     std::cout << "- nc: " << n_centroids << std::endl;
 
-    tiptoe_clustering(
+    // tiptoe_clustering(
+    //     d,
+    //     nb,
+    //     n_centroids,
+    //     xb,
+    //     centroids
+    // );
+
+    std::vector<std::vector<float>> cs = tiptoe_clustering_recursive(
         d,
         nb,
         n_centroids,
         xb,
-        centroids
+        max_nodes_per_centroids
     );
+
+    n_centroids = cs.size();
+    float* centroids = new float[d*n_centroids];
+
+    for(int i = 0; i < n_centroids; i++){
+        memcpy(centroids + i*d, cs[i].data(), d*sizeof(float));
+    }
+    std::cout << "New n_centrods: " << n_centroids << std::endl;
 
     std::cout << "Building flat index..." << std::endl;
 
     const char* index_key = "Flat";
     faiss::Index* index = faiss::index_factory(d, index_key);
     index->add(n_centroids, centroids);
+
+    faiss::write_index(index, "/home/clive/see/data/dataset/msmarco_bert/tiptoe_centroids.index");
+
     int n_dup_cluster = 2;
     faiss::idx_t* i_b = new faiss::idx_t[nb * n_dup_cluster];
     float* d_b = new float[nb * n_dup_cluster];
@@ -217,22 +330,12 @@ int main() {
         }
     }
 
-    int max_l = 0;
-    for(auto pair : assignment){
-        if(pair.second.size() > max_l){
-            max_l = pair.second.size();
-        }
-    }
-
-    std::cout << "Max size: " << max_l << std::endl;
-
-    return 0;
-
     // Constructing Index for each clusters
     std::map<std::pair<int, int>, int> reverse_map;
     std::cout << "Building index for each cluster..." << std::endl;
     std::vector<faiss::Index*> clusters;
     const char* flat_key = "Flat";
+    int max_cnt = 0;
     for(int cid = 0; cid < n_centroids; cid++){
         faiss::Index* index = faiss::index_factory(d, flat_key);
         if(assignment.find(cid) == assignment.end()){
@@ -245,17 +348,11 @@ int main() {
             cnt++;
         }
         std::cout << cnt << " nodes added to cluster "<< cid << std::endl;
+        max_cnt = cnt > max_cnt ? cnt : max_cnt;
         clusters.push_back(index);
     }
 
-    // Loading Queries
-    std::cout << "Loading queries..." << std::endl;
-    size_t nq;
-    float* xq;
-    size_t d2;
-    int n_result = 10;
-
-    xq = fvecs_read("../../../dataset/msmarco_bert/queries.fvecs", &d2, &nq);
+    std::cout << "Largest cluster contains "<< max_cnt << " nodes." << std::endl;
 
     faiss::idx_t* I = new faiss::idx_t[nq*n_result];
     float* D = new float[nq*n_result];
@@ -267,7 +364,7 @@ int main() {
     std::cout << "Searching..." << std::endl;
     for(int qid = 0; qid < nq; qid++){
         int cid = i_q[qid];
-        std::cout << qid << " query to cluster " << cid << std::endl;
+        // std::cout << qid << " query to cluster " << cid << std::endl;
         clusters[cid]->search(
             1, 
             xq + qid*d, 
@@ -292,7 +389,7 @@ int main() {
 
         // load ground-truth and convert int to long
         size_t nq2;
-        int* gt_int = ivecs_read("../../../dataset/msmarco_bert/gt_10.ivecs", &k, &nq2);
+        int* gt_int = ivecs_read("/home/clive/see/data/dataset/msmarco_bert/gt_10.ivecs", &k, &nq2);
         assert(nq2 == nq || !"incorrect nb of ground truth entries");
 
         gt = new faiss::idx_t[k * nq];
@@ -330,7 +427,7 @@ int main() {
         result[i] = I[i];
     }
 
-    ivecs_write("../../../dataset/msmarco_bert/tiptoe_msmarco.ivecs", result, k, nq);
+    ivecs_write("/home/clive/see/data/dataset/msmarco_bert/tiptoe_msmarco.ivecs", result, k, nq);
 
     return 0;
 }

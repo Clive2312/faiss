@@ -37,6 +37,9 @@ target_link_libraries(hnsw_sift PRIVATE faiss)
 add_executable(kmeans_sift  EXCLUDE_FROM_ALL demo_kmeans_sift.cpp)
 target_link_libraries(kmeans_sift PRIVATE faiss)
 
+add_executable(kmeans_laion  EXCLUDE_FROM_ALL demo_kmeans_laion.cpp)
+target_link_libraries(kmeans_laion PRIVATE faiss)
+
 add_executable(kmeans_trip  EXCLUDE_FROM_ALL demo_kmeans_trip.cpp)
 target_link_libraries(kmeans_trip PRIVATE faiss)
 
