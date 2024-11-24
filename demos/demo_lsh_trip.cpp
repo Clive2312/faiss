@@ -21,6 +21,8 @@
 #include <faiss/index_factory.h>
 #include <faiss/index_io.h>
 #include <faiss/IndexHNSW.h>
+#include <faiss/IndexLSH.h>
+#include <faiss/IndexFlat.h>
 
 #define TUNING false
 
@@ -143,90 +145,47 @@ double elapsed() {
 
 int main() {
     double t0 = elapsed();
+
+    int num_tables = 20;
+    int num_probes = 100;
+    int nbits = 64;
+
+    std::vector<faiss::Index*> indices;
+    std::vector<faiss::Index*> flat_indices;
+    std::vector<std::set<faiss::idx_t>> result_set;
     
-    faiss::Index* index;
-    faiss::Index* pq_index;
 
     size_t d;
 
-    // size_t nt;
-    // float* xt = fvecs_read("/home/clive/see/data/dataset/laion1m/laion1m_base.fvecs", &d, &nt);
-    // fvecs_write("/home/clive/see/data/dataset/laion1m/1m/laion_base.fvecs", xt, d, nt);
-    // fvecs_write("/home/clive/see/data/dataset/laion1m/100k/laion_base.fvecs", xt, d, 100000);
-    // fvecs_write("/home/clive/see/data/dataset/laion1m/10k/laion_base.fvecs", xt, d, 10000);
-    // fvecs_write("/home/clive/see/data/dataset/laion1m/1k/laion_base.fvecs", xt, d, 1000);
-
-    // return 0;
-
     // {
-
-    //     const char* pq_index_key = "PQ32x4";
-    //     printf("[%.3f s] Loading train set\n", elapsed() - t0);
-
-    //     size_t nt;
-    //     float* xt = fvecs_read("/home/clive/see/data/dataset/laion1m/100k/laion_base.fvecs", &d, &nt);
-
-    //     printf("[%.3f s] Preparing index \"%s\" d=%ld\n",
-    //            elapsed() - t0,
-    //            pq_index_key,
-    //            d);
-    //     pq_index = faiss::index_factory(d, pq_index_key);
-    //     pq_index->metric_type = faiss::METRIC_INNER_PRODUCT;
-
-    //     // dynamic_cast<faiss::IndexPQ*>(pq_index)->do_polysemous_training = false;
-
-    //     // nt = 1000;
-
-    //     printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
-
-    //     pq_index->train(nt, xt);
-
-    //     // dynamic_cast<faiss::IndexPQ*>(pq_index)->pq.compute_sdc_table();
-
-    //     pq_index->add(nt, xt);
-
-    //     faiss::write_index(pq_index, "/home/clive/see/data/dataset/laion1m/100k/pq_full_32_4_ip.index");
-
-    //     delete[] xt;
-    //     return 0;
-    // }
-
-    // {
-    //     const char* index_key = "HNSW64";
+        // const char* index_key = "LSH32";
         
-    //     printf("[%.3f s] Loading database\n", elapsed() - t0);
+        printf("[%.3f s] Loading database\n", elapsed() - t0);
 
-    //     size_t nb, d2;
-    //     float* xb = fvecs_read("/home/clive/see/data/dataset/laion1m/100k/laion_base.fvecs", &d2, &nb);
-    //     d = d2;
-    //     assert(d == d2 || !"dataset does not have same dimension as train set");
+        size_t nb, d2;
+        float* xb = fvecs_read("/home/clive/see/data/dataset/trip_distilbert/passages.fvecs", &d2, &nb);
+        d = d2;
+        assert(d == d2 || !"dataset does not have same dimension as train set");
 
-    //     printf("[%.3f s] Indexing database, size %ld*%ld\n",
-    //            elapsed() - t0,
-    //            nb,
-    //            d);
+        printf("[%.3f s] Indexing database, size %ld*%ld\n",
+               elapsed() - t0,
+               nb,
+               d);
 
-    //     // nb = 100000;
+        for(int i = 0; i < num_tables; i++){
+            faiss::Index* index = new faiss::IndexLSH(d, nbits);
+            // index->metric_type = faiss::METRIC_INNER_PRODUCT;
+            index->add(nb, xb);
+            indices.push_back(index);
+        }
 
-    //     index = faiss::index_factory(d, index_key);
-    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 80;
-    //     index->metric_type = faiss::METRIC_INNER_PRODUCT;
-
-    //     index->add(nb, xb);
-
-    //     faiss::write_index(index, "/home/clive/see/data/dataset/laion1m/100k/hnsw_64_80_2_ip.index");
-    //     delete[] xb;
-
-    //     return 0;
+        // faiss::write_index(index, "/home/clive/see/data/dataset/trip_distilbert/hnsw_48_60_2_ip.index");
+        // delete[] xb;
+        // return 0;
     // }
 
-    index = faiss::read_index("/home/clive/see/data/dataset/laion1m/100k/hnsw_64_80_2_ip.index", 0);
-    d = 512;
-
-    // printf("[%.3f s] Index metric type %d\n", elapsed() - t0, index->metric_type);
-
-    // pq_index = faiss::read_index("/home/clive/see/data/dataset/laion1m/100k/pq_full_32_8_ip.index", 0);
-    // ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
+    // index = faiss::read_index("/home/clive/see/data/dataset/trip_distilbert/hnsw_64_80_2_ip.index", 0);
+    // d = 768;
 
     size_t nq;
     float* xq;
@@ -235,13 +194,15 @@ int main() {
         printf("[%.3f s] Loading queries\n", elapsed() - t0);
 
         size_t d2;
-        xq = fvecs_read("/home/clive/see/data/dataset/laion1m/laion_query.fvecs", &d2, &nq);
+        xq = fvecs_read("/home/clive/see/data/dataset/trip_distilbert/queries.fvecs", &d2, &nq);
         assert(d == d2 || !"query does not have same dimension as train set");
         printf("[%.3f s] Loaded %ld queries\n", elapsed() - t0, nq);
 
+        for(int i = 0; i < nq; i++){
+            flat_indices.push_back(new faiss::IndexFlatIP(d));
+            result_set.push_back(std::set<faiss::idx_t>());
+        } 
     }
-
-    // nq = 100;
 
     size_t k;         // nb of results per query in the GT
     faiss::idx_t* gt; // nq * k matrix of ground-truth nearest-neighbors
@@ -255,8 +216,8 @@ int main() {
 
         // load ground-truth and convert int to long
         size_t nq2;
-        int* gt_int = ivecs_read("/home/clive/see/data/dataset/laion1m/100k/gt.ivecs", &k, &nq2);
-        // assert(nq2 == nq || !"incorrect nb of ground truth entries");
+        int* gt_int = ivecs_read("/home/clive/see/data/dataset/trip_distilbert/gt_10.ivecs", &k, &nq2);
+        assert(nq2 == nq || !"incorrect nb of ground truth entries");
 
         gt = new faiss::idx_t[k * nq];
         for (int i = 0; i < k * nq; i++) {
@@ -279,56 +240,65 @@ int main() {
         gt = gt0;
     }
 
-    // Result of the auto-tuning
-    std::string selected_params;
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 2; efs <= 16; efs+=2){
+        // for(int efs = 16; efs <= 48; efs+=16){
 
-            faiss::idx_t* I = new faiss::idx_t[nq * k];
-            float* D = new float[nq * k];
-
-            faiss::SearchParametersHNSW* params = new faiss::SearchParametersHNSW();
-
-            printf("[%.3f s] Perform a search on %ld queries with efs %d k %ld\n",
+        printf("[%.3f s] Perform a search on %ld queries with k %ld\n",
                elapsed() - t0,
                nq,
-               efs,
                k);
 
-            params->efSearch = efs;
-            // params->efSpec = 1;
-            // params->efNeighbor = 12;
 
-            // nq = 1;
+        for(auto index : indices){
+            faiss::idx_t* I = new faiss::idx_t[nq * num_probes];
+            float* D = new float[nq * num_probes];
 
-            index->search(nq, xq, k, D, I, params);
+            index->search(nq, xq, num_probes, D, I, nullptr);
 
-            printf("[%.3f s] Compute recalls\n", elapsed() - t0);
-
-            compute_recall(
-                gt,
-                k,
-                I,
-                nq,
-                k
-            );
-
-            int* result = new int[nq * k];
-            for(int i = 0; i < nq*k; i++){
-                result[i] = I[i];
+            for(int iq = 0; iq < nq; iq++){
+                for(int j = 0; j < num_probes; j++){
+                    result_set[iq].insert(I[iq*num_probes + j]);
+                }
             }
-            // ivecs_write("../../../accuracy/sift/see_10.ivecs", result, k, nq);
 
             delete[] I;
             delete[] D;
         }
 
+        faiss::idx_t* I = new faiss::idx_t[nq * k];
+
+        for(int iq = 0; iq < nq; iq++){
+            // Get result vector
+            std::vector<faiss::idx_t> res(result_set[iq].begin(), result_set[iq].end());
+
+            for(auto id : res){
+                flat_indices[iq]->add(1, xb + id*d);
+            }
+
+            faiss::idx_t* tmp_I = new faiss::idx_t[nq * k];
+            float* tmp_D = new float[nq * k];
+
+            flat_indices[iq]->search(1, xq + iq*d, k, tmp_D, tmp_I, nullptr);
+
+            for(int j = 0; j < k; j++){
+                I[iq*k + j] = res[tmp_I[j]];
+            }
+        }
+
+        compute_recall(
+            gt,
+            k,
+            I,
+            nq,
+            k
+        );
+
     }
 
     delete[] xq;
     delete[] gt;
-    delete index;
+    delete[] xb;
     return 0;
 }

@@ -1666,34 +1666,34 @@ HNSWStats HNSW::search(
             MinimaxHeap candidates(ef);
             candidates.push(nearest, d_nearest);
 
-            std::set<int> c1;
-            std::set<int> c2;
+            // std::set<int> c1;
+            // std::set<int> c2;
 
-            faiss::idx_t* I1 = new faiss::idx_t[k];
-            faiss::idx_t* I2 = new faiss::idx_t[k];
+            // faiss::idx_t* I1 = new faiss::idx_t[k];
+            // faiss::idx_t* I2 = new faiss::idx_t[k];
 
-            float* D1 = new float[k];
-            float* D2 = new float[k];
+            // float* D1 = new float[k];
+            // float* D2 = new float[k];
 
-            MinimaxHeap candidates1(ef);
-            MinimaxHeap candidates2(ef);
-            candidates1.push(nearest, d_nearest);
-            candidates2.push(nearest, d_nearest);
+            // MinimaxHeap candidates1(ef);
+            // MinimaxHeap candidates2(ef);
+            // candidates1.push(nearest, d_nearest);
+            // candidates2.push(nearest, d_nearest);
 
-            search_from_candidates_direction_beam_hit_rate(
-                    c1, q, storage, *this, qdis, quantize_qdis, k, I1, D1, candidates1, vt, stats, 0, 0, params);
+            // search_from_candidates_direction_beam_hit_rate(
+            //         c1, q, storage, *this, qdis, quantize_qdis, k, I1, D1, candidates1, vt, stats, 0, 0, params);
 
-            search_from_candidates_hit_rate(c2, *this, qdis, k, I2, D2, candidates2, vt, stats, 0, 0, params);
+            // search_from_candidates_hit_rate(c2, *this, qdis, k, I2, D2, candidates2, vt, stats, 0, 0, params);
 
-            auto result = intersection(c1, c2);
+            // auto result = intersection(c1, c2);
 
-            stats.hit_rate = result.size() *1.0 / c1.size();
+            // stats.hit_rate = result.size() *1.0 / c1.size();
 
-            std::cout << result.size() *1.0 / c1.size() << std::endl;
+            // std::cout << result.size() *1.0 / c1.size() << std::endl;
 
-            // search_from_candidates_direction_beam(
-            //         q, storage, *this, qdis, quantize_qdis, k, I, D, candidates, vt, stats, 0, 0, params);
-            search_from_candidates(*this, qdis, k, I, D, candidates, vt, stats, 0, 0, params);
+            search_from_candidates_direction_beam(
+                    q, storage, *this, qdis, quantize_qdis, k, I, D, candidates, vt, stats, 0, 0, params);
+            // search_from_candidates(*this, qdis, k, I, D, candidates, vt, stats, 0, 0, params);
 
         } else {
             std::priority_queue<Node> top_candidates =

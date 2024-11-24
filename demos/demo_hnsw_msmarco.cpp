@@ -179,35 +179,35 @@ int main() {
     //     return 0;
     // }
 
-    // {
-    //     const char* index_key = "HNSW32";
+    {
+        const char* index_key = "HNSW128";
         
-    //     printf("[%.3f s] Loading database\n", elapsed() - t0);
+        printf("[%.3f s] Loading database\n", elapsed() - t0);
 
-    //     size_t nb, d2;
-    //     float* xb = fvecs_read("../../../dataset/msmarco_bert/passages.fvecs", &d2, &nb);
-    //     d = d2;
-    //     assert(d == d2 || !"dataset does not have same dimension as train set");
+        size_t nb, d2;
+        float* xb = fvecs_read("/home/clive/see/data/dataset/msmarco_bert/passages.fvecs", &d2, &nb);
+        d = d2;
+        assert(d == d2 || !"dataset does not have same dimension as train set");
 
-    //     printf("[%.3f s] Indexing database, size %ld*%ld\n",
-    //            elapsed() - t0,
-    //            nb,
-    //            d);
+        printf("[%.3f s] Indexing database, size %ld*%ld\n",
+               elapsed() - t0,
+               nb,
+               d);
 
-    //     index = faiss::index_factory(d, index_key, faiss::METRIC_INNER_PRODUCT);
-    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 40;
+        index = faiss::index_factory(d, index_key, faiss::METRIC_INNER_PRODUCT);
+        ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 200;
 
-    //     index->add(nb, xb);
+        index->add(nb, xb);
 
-    //     faiss::write_index(index, "../../../dataset/msmarco_bert/hnsw_32_40_ip.index");
-    //     delete[] xb;
-    //     return 0;
-    // }
+        faiss::write_index(index, "/home/clive/see/data/dataset/msmarco_bert/hnsw_128_200_2_ip.index");
+        delete[] xb;
+        return 0;
+    }
 
-    index = faiss::read_index("../../../dataset/msmarco_bert/hnsw_32_40_ip.index", 0);
+    index = faiss::read_index("/home/clive/see/data/dataset/msmarco_bert/hnsw_96_160_2_ip.index", 0);
     d = 768;
 
-    pq_index = faiss::read_index("../../../dataset/msmarco_bert/pq_full_32_ip.index", 0);
+    pq_index = faiss::read_index("/home/clive/see/data/dataset/msmarco_bert/pq_full_32_ip.index", 0);
     ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
 
     size_t nq;
@@ -217,7 +217,7 @@ int main() {
         printf("[%.3f s] Loading queries\n", elapsed() - t0);
 
         size_t d2;
-        xq = fvecs_read("../../../dataset/msmarco_bert/queries.fvecs", &d2, &nq);
+        xq = fvecs_read("/home/clive/see/data/dataset/msmarco_bert/queries.fvecs", &d2, &nq);
         assert(d == d2 || !"query does not have same dimension as train set");
         printf("[%.3f s] Loaded %ld queries\n", elapsed() - t0, nq);
 
@@ -235,7 +235,7 @@ int main() {
 
         // load ground-truth and convert int to long
         size_t nq2;
-        int* gt_int = ivecs_read("../../../dataset/msmarco_bert/gt_10.ivecs", &k, &nq2);
+        int* gt_int = ivecs_read("/home/clive/see/data/dataset/msmarco_bert/gt_10.ivecs", &k, &nq2);
         assert(nq2 == nq || !"incorrect nb of ground truth entries");
 
         gt = new faiss::idx_t[k * nq];
@@ -264,7 +264,7 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efn = 32; efn <= 32; efn*=2){
+        for(int efs = 16; efs <= 64; efs+=16){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -274,12 +274,12 @@ int main() {
             printf("[%.3f s] Perform a search on %ld queries with efn %d k %ld\n",
                elapsed() - t0,
                nq,
-               efn,
+               efs,
                k);
 
-            params->efSearch = 224;
-            params->efSpec = efn;
-            params->efNeighbor = 12;
+            params->efSearch = efs;
+            params->efSpec = 8;
+            params->efNeighbor = 24;
 
             index->search(nq, xq, k, D, I, params);
 
@@ -297,7 +297,7 @@ int main() {
             for(int i = 0; i < nq*k; i++){
                 result[i] = I[i];
             }
-            ivecs_write("../../../dataset/msmarco_bert/efspec_32_10.ivecs", result, k, nq);
+            // ivecs_write("../../../dataset/msmarco_bert/efspec_32_10.ivecs", result, k, nq);
 
 
             delete[] I;

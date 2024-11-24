@@ -46,6 +46,9 @@ target_link_libraries(kmeans_trip PRIVATE faiss)
 add_executable(kmeans_msmarco  EXCLUDE_FROM_ALL demo_kmeans_msmarco.cpp)
 target_link_libraries(kmeans_msmarco PRIVATE faiss)
 
+add_executable(lsh_trip  EXCLUDE_FROM_ALL demo_lsh_trip.cpp)
+target_link_libraries(lsh_trip PRIVATE faiss)
+
 add_executable(demo_weighted_kmeans EXCLUDE_FROM_ALL demo_weighted_kmeans.cpp)
 target_link_libraries(demo_weighted_kmeans PRIVATE faiss)
 

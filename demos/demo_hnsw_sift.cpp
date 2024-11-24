@@ -180,12 +180,12 @@ int main() {
     // }
 
     // {
-    //     const char* index_key = "HNSW32";
+    //     const char* index_key = "HNSW64";
         
     //     printf("[%.3f s] Loading database\n", elapsed() - t0);
 
     //     size_t nb, d2;
-    //     float* xb = fvecs_read("/home/clive/see/data/dataset//sift/base.fvecs", &d2, &nb);
+    //     float* xb = fvecs_read("/home/clive/see/data/dataset/sift/base.fvecs", &d2, &nb);
     //     d = d2;
     //     assert(d == d2 || !"dataset does not have same dimension as train set");
 
@@ -195,15 +195,17 @@ int main() {
     //            d);
 
     //     index = faiss::index_factory(d, index_key);
-    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 40;
+    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 80;
 
     //     index->add(nb, xb);
 
-    //     faiss::write_index(index, "/home/clive/see/data/dataset//sift/hnsw_32_40.index");
+    //     faiss::write_index(index, "/home/clive/see/data/dataset/sift/hnsw_64_80_2_ip.index");
     //     delete[] xb;
+
+    //     return 0;
     // }
 
-    index = faiss::read_index("/home/clive/see/data/dataset/sift/hnsw.index", 0);
+    index = faiss::read_index("/home/clive/see/data/dataset/sift/hnsw_64_80_2_ip.index", 0);
     d = 128;
 
     pq_index = faiss::read_index("/home/clive/see/data/dataset//sift/pq_full_8.index", 0);
@@ -265,7 +267,7 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 32; efs <= 32; efs+=1){
+        for(int efs = 12; efs <= 24; efs+=4){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -280,7 +282,7 @@ int main() {
 
             params->efSearch = efs;
             params->efSpec = 4;
-            params->efNeighbor = 8;
+            params->efNeighbor = 12;
 
             index->search(nq, xq, k, D, I, params);
 
@@ -298,7 +300,7 @@ int main() {
             for(int i = 0; i < nq*k; i++){
                 result[i] = I[i];
             }
-            ivecs_write("../../../accuracy/sift/see_10.ivecs", result, k, nq);
+            // ivecs_write("../../../accuracy/sift/see_10.ivecs", result, k, nq);
 
             delete[] I;
             delete[] D;

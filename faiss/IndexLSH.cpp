@@ -11,10 +11,13 @@
 #include <cstring>
 
 #include <algorithm>
+#include <random>
 
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/utils/hamming.h>
 #include <faiss/utils/utils.h>
+#include <faiss/utils/random.h>
+
 
 namespace faiss {
 
@@ -31,7 +34,10 @@ IndexLSH::IndexLSH(idx_t d, int nbits, bool rotate_data, bool train_thresholds)
     is_trained = !train_thresholds;
 
     if (rotate_data) {
-        rrot.init(5);
+        RandomGenerator rg;
+        rrot.init(rg.rand_int());
+
+        // rrot.init(5);
     } else {
         FAISS_THROW_IF_NOT(d >= nbits);
     }
