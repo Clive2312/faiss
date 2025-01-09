@@ -397,12 +397,13 @@ void search_neighbors_to_add(
  **************************************************************/
 
 /// greedily update a nearest vector at a given level
-void greedy_update_nearest(
+int greedy_update_nearest(
         const HNSW& hnsw,
         DistanceComputer& qdis,
         int level,
         storage_idx_t& nearest,
         float& d_nearest) {
+    int cnt = 0;
     for (;;) {
         storage_idx_t prev_nearest = nearest;
 
@@ -418,8 +419,9 @@ void greedy_update_nearest(
                 d_nearest = dis;
             }
         }
+        cnt++;
         if (nearest == prev_nearest) {
-            return;
+            return cnt;
         }
     }
 }
@@ -1552,7 +1554,9 @@ HNSWStats HNSW::search(
         float d_nearest = qdis(nearest);
 
         for (int level = max_level; level >= 1; level--) {
-            greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+            // greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+            int cnt = greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+            stats.cnts_per_layer[level] = cnt;
         }
 
         int ef = std::max(params ? params->efSearch : efSearch, k);
@@ -1657,7 +1661,8 @@ HNSWStats HNSW::search(
             // } else{
             //     greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
             // }
-            greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+            int cnt = greedy_update_nearest(*this, qdis, level, nearest, d_nearest);
+            stats.cnts_per_layer[level] = cnt;
         }
 
         int ef = std::max(params ? params->efSearch : efSearch, k);

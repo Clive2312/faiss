@@ -21,6 +21,8 @@
 #include <faiss/index_factory.h>
 #include <faiss/index_io.h>
 #include <faiss/IndexHNSW.h>
+#include <sstream>
+
 
 #define TUNING false
 
@@ -179,36 +181,36 @@ int main() {
     //     return 0;
     // }
 
-    {
-        const char* index_key = "HNSW128";
+    // {
+    //     const char* index_key = "HNSW128";
         
-        printf("[%.3f s] Loading database\n", elapsed() - t0);
+    //     printf("[%.3f s] Loading database\n", elapsed() - t0);
 
-        size_t nb, d2;
-        float* xb = fvecs_read("/home/clive/see/data/dataset/msmarco_bert/passages.fvecs", &d2, &nb);
-        d = d2;
-        assert(d == d2 || !"dataset does not have same dimension as train set");
+    //     size_t nb, d2;
+    //     float* xb = fvecs_read("/home/clive/see/data/dataset/msmarco_bert/passages.fvecs", &d2, &nb);
+    //     d = d2;
+    //     assert(d == d2 || !"dataset does not have same dimension as train set");
 
-        printf("[%.3f s] Indexing database, size %ld*%ld\n",
-               elapsed() - t0,
-               nb,
-               d);
+    //     printf("[%.3f s] Indexing database, size %ld*%ld\n",
+    //            elapsed() - t0,
+    //            nb,
+    //            d);
 
-        index = faiss::index_factory(d, index_key, faiss::METRIC_INNER_PRODUCT);
-        ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 200;
+    //     index = faiss::index_factory(d, index_key, faiss::METRIC_INNER_PRODUCT);
+    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 200;
 
-        index->add(nb, xb);
+    //     index->add(nb, xb);
 
-        faiss::write_index(index, "/home/clive/see/data/dataset/msmarco_bert/hnsw_128_200_2_ip.index");
-        delete[] xb;
-        return 0;
-    }
+    //     faiss::write_index(index, "/home/clive/see/data/dataset/msmarco_bert/hnsw_128_200_2_ip.index");
+    //     delete[] xb;
+    //     return 0;
+    // }
 
-    index = faiss::read_index("/home/clive/see/data/dataset/msmarco_bert/hnsw_96_160_2_ip.index", 0);
+    index = faiss::read_index("/home/clive/see/data/dataset/msmarco_bert/hnsw_128_200_2_ip.index", 0);
     d = 768;
 
-    pq_index = faiss::read_index("/home/clive/see/data/dataset/msmarco_bert/pq_full_32_ip.index", 0);
-    ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
+    // pq_index = faiss::read_index("/home/clive/see/data/dataset/msmarco_bert/pq_full_32_ip.index", 0);
+    // ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
 
     size_t nq;
     float* xq;
@@ -264,7 +266,7 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 16; efs <= 64; efs+=16){
+        for(int efs = 2; efs <= 48; efs+=2){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -278,8 +280,8 @@ int main() {
                k);
 
             params->efSearch = efs;
-            params->efSpec = 8;
-            params->efNeighbor = 24;
+            // params->efSpec = 8;
+            // params->efNeighbor = efs;
 
             index->search(nq, xq, k, D, I, params);
 
@@ -297,7 +299,13 @@ int main() {
             for(int i = 0; i < nq*k; i++){
                 result[i] = I[i];
             }
-            // ivecs_write("../../../dataset/msmarco_bert/efspec_32_10.ivecs", result, k, nq);
+
+            // std::ostringstream oss;
+            // oss << "/home/clive/see/data/osdi/ablation/efn/";
+            // oss << efs;
+            // oss << ".ivecs";
+            
+            // ivecs_write(oss.str().c_str(), result, k, nq);
 
 
             delete[] I;

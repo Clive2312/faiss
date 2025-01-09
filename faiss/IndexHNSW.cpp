@@ -309,6 +309,9 @@ void IndexHNSW::search(
     idx_t check_period =
             InterruptCallback::get_period_hint(hnsw.max_level * d * efSearch);
 
+    std::vector<int> cnt_per_layer;
+    cnt_per_layer.resize(10);
+
     for (idx_t i0 = 0; i0 < n; i0 += check_period) {
         idx_t i1 = std::min(i0 + check_period, n);
 
@@ -348,6 +351,13 @@ void IndexHNSW::search(
                 hit_rate += stats.hit_rate;
                 maxheap_reorder(k, simi, idxi);
 
+                #pragma omp critical
+                {
+                    for(int i = 0; i < 10; i++){
+                        cnt_per_layer[i] += stats.cnts_per_layer[i];
+                    }
+                }
+
                 if (reconstruct_from_neighbors &&
                     reconstruct_from_neighbors->k_reorder != 0) {
                     int k_reorder = reconstruct_from_neighbors->k_reorder;
@@ -367,7 +377,14 @@ void IndexHNSW::search(
         InterruptCallback::check();
     }
 
-    std::cout << "hit rate: " << hit_rate / n << std::endl;
+    // std::cout << "hit rate: " << hit_rate / n << std::endl;
+
+    std::cout << "average cnts: " << std::endl;
+    for(int i = 0; i < 10; i++){
+        std::cout << cnt_per_layer[i]*1.0 / n  << " ";
+    }
+
+    std::cout << std::endl;
 
     if (is_similarity_metric(metric_type)) {
         // we need to revert the negated distances

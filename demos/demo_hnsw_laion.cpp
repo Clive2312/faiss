@@ -192,7 +192,7 @@ int main() {
     // }
 
     // {
-    //     const char* index_key = "HNSW64";
+    //     const char* index_key = "HNSW128";
         
     //     printf("[%.3f s] Loading database\n", elapsed() - t0);
 
@@ -209,18 +209,18 @@ int main() {
     //     // nb = 100000;
 
     //     index = faiss::index_factory(d, index_key);
-    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 80;
+    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 160;
     //     index->metric_type = faiss::METRIC_INNER_PRODUCT;
 
     //     index->add(nb, xb);
 
-    //     faiss::write_index(index, "/home/clive/see/data/dataset/laion1m/100k/hnsw_64_80_2_ip.index");
+    //     faiss::write_index(index, "/home/clive/see/data/dataset/laion1m/100k/hnsw_128_160_2_ip.index");
     //     delete[] xb;
 
     //     return 0;
     // }
 
-    index = faiss::read_index("/home/clive/see/data/dataset/laion1m/100k/hnsw_64_80_2_ip.index", 0);
+    index = faiss::read_index("/home/clive/see/data/dataset/laion1m/100k/hnsw_128_160_2_ip.index", 0);
     d = 512;
 
     // printf("[%.3f s] Index metric type %d\n", elapsed() - t0, index->metric_type);
@@ -284,7 +284,7 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 2; efs <= 16; efs+=2){
+        for(int efs = 1; efs <= 8; efs+=1){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -299,10 +299,13 @@ int main() {
 
             params->efSearch = efs;
             // params->efSpec = 1;
-            // params->efNeighbor = 12;
+            // params->efNeighbor = 24;
 
             // nq = 1;
 
+            // for(int i = 0; i < nq; i++){
+            //     index->search(1, xq + i * d, k, D + i * d, I + i * d, params);
+            // }
             index->search(nq, xq, k, D, I, params);
 
             printf("[%.3f s] Compute recalls\n", elapsed() - t0);

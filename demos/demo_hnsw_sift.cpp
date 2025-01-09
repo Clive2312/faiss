@@ -180,7 +180,7 @@ int main() {
     // }
 
     // {
-    //     const char* index_key = "HNSW64";
+    //     const char* index_key = "HNSW128";
         
     //     printf("[%.3f s] Loading database\n", elapsed() - t0);
 
@@ -195,11 +195,11 @@ int main() {
     //            d);
 
     //     index = faiss::index_factory(d, index_key);
-    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 80;
+    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 160;
 
     //     index->add(nb, xb);
 
-    //     faiss::write_index(index, "/home/clive/see/data/dataset/sift/hnsw_64_80_2_ip.index");
+    //     faiss::write_index(index, "/home/clive/see/data/dataset/sift/hnsw_128_160_2_ip.index");
     //     delete[] xb;
 
     //     return 0;
@@ -208,8 +208,8 @@ int main() {
     index = faiss::read_index("/home/clive/see/data/dataset/sift/hnsw_64_80_2_ip.index", 0);
     d = 128;
 
-    pq_index = faiss::read_index("/home/clive/see/data/dataset//sift/pq_full_8.index", 0);
-    ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
+    // pq_index = faiss::read_index("/home/clive/see/data/dataset//sift/pq_full_8.index", 0);
+    // ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
 
     size_t nq;
     float* xq;
@@ -267,7 +267,7 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 12; efs <= 24; efs+=4){
+        for(int efs = 2; efs <= 32; efs+=2){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -281,8 +281,8 @@ int main() {
                k);
 
             params->efSearch = efs;
-            params->efSpec = 4;
-            params->efNeighbor = 12;
+            // params->efSpec = 4;
+            // params->efNeighbor = 16;
 
             index->search(nq, xq, k, D, I, params);
 

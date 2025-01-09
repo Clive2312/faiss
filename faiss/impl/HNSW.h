@@ -249,6 +249,7 @@ struct HNSWStats {
     size_t ndis;
     size_t nreorder;
     float hit_rate;
+    std::vector<int> cnts_per_layer;
 
     HNSWStats(
             size_t n1 = 0,
@@ -257,7 +258,9 @@ struct HNSWStats {
             size_t ndis = 0,
             size_t nreorder = 0,
             float hit_rate = 0.0)
-            : n1(n1), n2(n2), n3(n3), ndis(ndis), nreorder(nreorder), hit_rate(hit_rate) {}
+            : n1(n1), n2(n2), n3(n3), ndis(ndis), nreorder(nreorder), hit_rate(hit_rate) {
+                cnts_per_layer.resize(100);
+            }
 
     void reset() {
         n1 = n2 = n3 = 0;

@@ -179,38 +179,38 @@ int main() {
     //     return 0;
     // }
 
-    {
-        const char* index_key = "HNSW128";
+    // {
+    //     const char* index_key = "HNSW128";
         
-        printf("[%.3f s] Loading database\n", elapsed() - t0);
+    //     printf("[%.3f s] Loading database\n", elapsed() - t0);
 
-        size_t nb, d2;
-        float* xb = fvecs_read("/home/clive/see/data/dataset/trip_distilbert/passages.fvecs", &d2, &nb);
-        d = d2;
-        assert(d == d2 || !"dataset does not have same dimension as train set");
+    //     size_t nb, d2;
+    //     float* xb = fvecs_read("/home/clive/see/data/dataset/trip_distilbert/passages.fvecs", &d2, &nb);
+    //     d = d2;
+    //     assert(d == d2 || !"dataset does not have same dimension as train set");
 
-        printf("[%.3f s] Indexing database, size %ld*%ld\n",
-               elapsed() - t0,
-               nb,
-               d);
+    //     printf("[%.3f s] Indexing database, size %ld*%ld\n",
+    //            elapsed() - t0,
+    //            nb,
+    //            d);
 
-        index = faiss::index_factory(d, index_key, faiss::METRIC_INNER_PRODUCT);
-        // index->metric_type = faiss::METRIC_INNER_PRODUCT;
-        ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 160;
+    //     index = faiss::index_factory(d, index_key, faiss::METRIC_INNER_PRODUCT);
+    //     // index->metric_type = faiss::METRIC_INNER_PRODUCT;
+    //     ((faiss::IndexHNSW*) index)->hnsw.efConstruction = 160;
         
 
-        index->add(nb, xb);
+    //     index->add(nb, xb);
 
-        faiss::write_index(index, "/home/clive/see/data/dataset/trip_distilbert/hnsw_128_160_2_ip.index");
-        delete[] xb;
-        return 0;
-    }
+    //     faiss::write_index(index, "/home/clive/see/data/dataset/trip_distilbert/hnsw_128_160_2_ip.index");
+    //     delete[] xb;
+    //     return 0;
+    // }
 
-    index = faiss::read_index("/home/clive/see/data/dataset/trip_distilbert/hnsw_96_120_2_ip.index", 0);
+    index = faiss::read_index("/home/clive/see/data/dataset/trip_distilbert/hnsw_128_160_2_ip.index", 0);
     d = 768;
 
-    pq_index = faiss::read_index("/home/clive/see/data/dataset/trip_distilbert/pq_full_32_ip.index", 0);
-    ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
+    // pq_index = faiss::read_index("/home/clive/see/data/dataset/trip_distilbert/pq_full_32_ip.index", 0);
+    // ((faiss::IndexHNSW*)index)->set_quantize_storage(pq_index);
 
     size_t nq;
     float* xq;
@@ -266,7 +266,7 @@ int main() {
 
     { // Use the found configuration to perform a search
 
-        for(int efs = 18; efs <= 48; efs+=6){
+        for(int efs = 12; efs <= 32; efs+=2){
 
             faiss::idx_t* I = new faiss::idx_t[nq * k];
             float* D = new float[nq * k];
@@ -280,8 +280,8 @@ int main() {
                k);
 
             params->efSearch = efs;
-            params->efSpec = 6;
-            params->efNeighbor = 24;
+            // params->efSpec = 4;
+            // params->efNeighbor = 64;
 
             index->search(nq, xq, k, D, I, params);
 
